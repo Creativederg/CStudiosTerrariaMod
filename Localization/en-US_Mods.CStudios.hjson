@@ -1,0 +1,43 @@
+Projectiles: {
+	PsybitMinionLaser.DisplayName: Psybit Minion Laser
+	PsybitMinion.DisplayName: Psybit Minion
+	PsybitChargedLaser.DisplayName: Psybit Charged Laser
+	PsybitChannelBeam.DisplayName: Psybit Channel Beam
+}
+
+Items: {
+	PsychokineticArray: {
+		Tooltip: ""
+		DisplayName: Psychokinetic Array
+	}
+}
+
+Buffs: {
+	PsybitOverchargedCooldown: {
+		Description: Mods.CStudios.Buffs.PsybitOverchargedCooldown.Description
+		DisplayName: Psybit Overcharged Cooldown
+	}
+
+	PsybitMinionBuff: {
+		Description: Mods.CStudios.Buffs.PsybitMinionBuff.Description
+		DisplayName: Psybit Minion Buff
+	}
+
+	PsybitMarked: {
+		Description: Mods.CStudios.Buffs.PsybitMarked.Description
+		DisplayName: Psybit Marked
+	}
+
+	PsybitLaserCooldown: {
+		Description: Mods.CStudios.Buffs.PsybitLaserCooldown.Description
+		DisplayName: Psybit Laser Cooldown
+	}
+
+	EntropicCorruption: {
+		Description: Mods.CStudios.Buffs.EntropicCorruption.Description
+		DisplayName: Entropic Corruption
+	}
+}
+
+DamageClasses.PsychokineticDamageClass.DisplayName: Psychokinetic Damage Class
+"Keybinds.Psybit Overcharge.DisplayName": Psybit  Overcharge
