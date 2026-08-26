@@ -20,8 +20,8 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
 {
     public class PsybitGunCharged : PsybitGun
     {
-        public override string Texture => "CStudios/Content/Projectiles/Summon/Psybit/PsybitGunUncharged";
-        public override string TextureFlash => "CStudios/Content/Projectiles/Summon/Psybit/PsybitGunUnchargedFlash";
+        public override string Texture => "CStudios/Content/Projectiles/Summon/Psybits/PsybitGunUncharged";
+        public override string TextureFlash => "CStudios/Content/Projectiles/Summon/Psybits/PsybitGunUnchargedFlash";
         //Use the extra recoil/reload code.
         public override bool UseRecoil => false;
         //The dust that appears from the barrel after shooting.
@@ -120,17 +120,17 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             // Getting texture of projectile
             Texture2D texture = TextureAssets.Projectile[Type].Value;
 
-            Texture2D texturePsybit1 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybit/Psybit4");
-            Texture2D texturePsybit2 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybit/Psybit5");
-            Texture2D texturePsybit3 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybit/Psybit6");
-            Texture2D texturePsybit4 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybit/Psybit1");
-            Texture2D texturePsybit5 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybit/Psybit2");
-            Texture2D texturePsybit6 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybit/Psybit3");
-            Texture2D texturePsybit7 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybit/Psybit7");
-            Texture2D texturePsybit8 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybit/Psybit8");
-            Texture2D texturePsybit9 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybit/Psybit9");
-            Texture2D texturePsybit10 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybit/Psybit10");
-            Texture2D texturePsybit11 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybit/Psybit11");
+            Texture2D texturePsybit1 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybits/Psybit4");
+            Texture2D texturePsybit2 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybits/Psybit5");
+            Texture2D texturePsybit3 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybits/Psybit6");
+            Texture2D texturePsybit4 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybits/Psybit1");
+            Texture2D texturePsybit5 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybits/Psybit2");
+            Texture2D texturePsybit6 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybits/Psybit3");
+            Texture2D texturePsybit7 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybits/Psybit7");
+            Texture2D texturePsybit8 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybits/Psybit8");
+            Texture2D texturePsybit9 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybits/Psybit9");
+            Texture2D texturePsybit10 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybits/Psybit10");
+            Texture2D texturePsybit11 = (Texture2D)Request<Texture2D>("CStudios/Content/Projectiles/Summon/Psybits/Psybit11");
 
             // Get the currently selected frame on the texture.
             Rectangle sourceRectangle = texture.Frame(1, Main.projFrames[Type], frameY: Projectile.frame);

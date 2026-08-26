@@ -1,4 +1,4 @@
-
+﻿
 using Microsoft.Xna.Framework;
 
 using Terraria;
@@ -69,6 +69,18 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             {
                 return;
             }
+            // In AI(), after CheckActive:
+            if (owner.HasBuff(BuffType<PsybitOvercharge>()))
+            {
+                // Visual: brighter / different frame, still same movement
+                Projectile.alpha = 0;
+                if (Main.rand.NextBool(2))
+                {
+                    Dust d = Dust.NewDustPerfect(Projectile.Center, DustID.Electric,
+                        Main.rand.NextVector2Circular(2f, 2f), 100, new Color(255, 40, 40), 1.2f);
+                    d.noGravity = true;
+                }
+            }
 
             Projectile.frame = (int)PsybitID;
             GeneralBehavior(owner, out Vector2 vectorToIdlePosition, out float distanceToIdlePosition);
@@ -82,31 +94,41 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             }
             Projectile.scale += 0.02f;
             Projectile.scale = Math.Clamp(Projectile.scale, -1, 1);
-            if (Projectile.ai[0] > 90)
+            // Continuous beam while we have a target in range
+            if (foundTarget && distanceFromTarget < 500f)
             {
+                bool overcharged = owner.HasBuff(BuffType<PsybitOvercharge>());
+                int beamType = overcharged
+                    ? ProjectileType<PsybitMinionChargedBeam>()
+                    : ProjectileType<PsybitMinionBeam>();
 
-                if (foundTarget && distanceFromTarget < 300)
+                bool hasBeam = false;
+                for (int i = 0; i < Main.maxProjectiles; i++)
                 {
-                    Projectile.ai[0] = Main.rand.Next(-20, 20);
-                    int type = ProjectileType<PsybitMinionLaser>();
-
-
-                    for (int d = 0; d < 5; d++)
+                    Projectile p = Main.projectile[i];
+                    if (p.active && p.owner == Projectile.owner
+                        && (int)p.ai[1] == Projectile.whoAmI
+                        && (p.type == ProjectileType<PsybitMinionBeam>()
+                            || p.type == ProjectileType<PsybitMinionChargedBeam>()))
                     {
-                        Dust.NewDust(Projectile.Center, 0, 0, DustID.Electric, 0f + Main.rand.Next(-3, 3), 0f + Main.rand.Next(-3, 3), 150, default, 0.5f);
+                        // Wrong mode still active (e.g. ultimate just started/ended) → replace
+                        if (p.type != beamType)
+                            p.Kill();
+                        else
+                            hasBeam = true;
+                        break;
                     }
+                }
 
-                    Vector2 position = Projectile.Center;
-
-                    float launchSpeed = 15f;
-                    Vector2 direction = Vector2.Normalize(targetCenter - Projectile.Center);
-                    Vector2 velocity = direction * launchSpeed;
-
-                    int index = Projectile.NewProjectile(Projectile.GetSource_FromThis(), position.X, position.Y, velocity.X, velocity.Y, type, (int)(Projectile.damage * damageBonus), 0f, owner.whoAmI);
-                    //Projectile.alpha = 255;
-                    //Projectile.scale = 0;
-                    //Projectile.ai[1] = Main.rand.Next(0, 360);
-
+                if (!hasBeam && Projectile.owner == Main.myPlayer)
+                {
+                    int index = Projectile.NewProjectile(
+                        Projectile.GetSource_FromThis(),
+                        Projectile.Center, Vector2.Zero,
+                        beamType,
+                        (int)(Projectile.damage * (overcharged ? 2.5f : damageBonus)), // stronger in ultimate
+                        0f, owner.whoAmI,
+                        0f, Projectile.whoAmI);
                     Main.projectile[index].originalDamage = Projectile.damage;
                 }
             }
@@ -131,7 +153,6 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                 }
                 Projectile.alpha = 255;
                 Projectile.ai[0] = Main.rand.Next(-20, 20);
-                Projectile.scale = -0.5f;
                 Projectile.ai[1] = Main.rand.Next(0, 360);
             }
             else
@@ -215,47 +236,90 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
 
         private void SearchForTargets(Player owner, out bool foundTarget, out float distanceFromTarget, out Vector2 targetCenter)
         {
-            // Starting search distance
-            distanceFromTarget = 200f;
-            targetCenter = Projectile.position;
+            distanceFromTarget = 1200f;
+            targetCenter = Projectile.Center;
             foundTarget = false;
+            int targetIndex = -1;
 
+            // 1) Player right-click target
+            if (owner.HasMinionAttackTargetNPC)
+            {
+                NPC npc = Main.npc[owner.MinionAttackTargetNPC];
+                if (npc.CanBeChasedBy())
+                {
+                    float between = Vector2.Distance(npc.Center, Projectile.Center);
+                    if (between < 2000f)
+                    {
+                        distanceFromTarget = between;
+                        targetCenter = npc.Center;
+                        foundTarget = true;
+                        targetIndex = npc.whoAmI;
+                    }
+                }
+            }
+
+            // 2) Marked enemies
             if (!foundTarget)
             {
-                // This code is required either way, used for finding a target
                 for (int i = 0; i < Main.maxNPCs; i++)
                 {
                     NPC npc = Main.npc[i];
+                    if (!npc.CanBeChasedBy() || !npc.HasBuff(BuffType<PsybitMarked>()))
+                        continue;
 
-                    if (npc.CanBeChasedBy() && npc.HasBuff(BuffType<PsybitMarked>()))
+                    float between = Vector2.Distance(npc.Center, Projectile.Center);
+                    if (between < distanceFromTarget)
+                    {
+                        distanceFromTarget = between;
+                        targetCenter = npc.Center;
+                        foundTarget = true;
+                        targetIndex = npc.whoAmI;
+                    }
+                }
+            }
+
+            // 3) Stick to last target after mark expires
+            if (!foundTarget && Projectile.localAI[1] >= 0)
+            {
+                int last = (int)Projectile.localAI[1];
+                if (last >= 0 && last < Main.maxNPCs)
+                {
+                    NPC npc = Main.npc[last];
+                    if (npc.active && npc.CanBeChasedBy())
                     {
                         float between = Vector2.Distance(npc.Center, Projectile.Center);
-                        bool closest = Vector2.Distance(Projectile.Center, targetCenter) > between;
-                        bool inRange = between < distanceFromTarget;
-
-                        if (npc.buffTime[npc.FindBuffIndex(BuffType<PsybitMarked>())] <= 1)
-                        {
-                            if (Projectile.scale >= 0.1f)
-                            {
-                                for (int d = 0; d < 5; d++)
-                                {
-                                    int dustIndex = Dust.NewDust(Projectile.Center, 0, 0, DustID.GemSapphire, 0f + Main.rand.Next(-1, 1), 0f + Main.rand.Next(-1, 1), 0, default, 2f);
-                                    Main.dust[dustIndex].noGravity = true;
-                                }
-                            }
-
-                            Projectile.scale = -0.5f;
-                        }
-
-                        if (closest && inRange || !foundTarget)
+                        if (between < 1500f)
                         {
                             distanceFromTarget = between;
                             targetCenter = npc.Center;
                             foundTarget = true;
+                            targetIndex = npc.whoAmI;
                         }
                     }
                 }
             }
+
+            // 4) Fallback: any nearby enemy
+            if (!foundTarget)
+            {
+                for (int i = 0; i < Main.maxNPCs; i++)
+                {
+                    NPC npc = Main.npc[i];
+                    if (!npc.CanBeChasedBy())
+                        continue;
+
+                    float between = Vector2.Distance(npc.Center, Projectile.Center);
+                    if (between < 800f && between < distanceFromTarget)
+                    {
+                        distanceFromTarget = between;
+                        targetCenter = npc.Center;
+                        foundTarget = true;
+                        targetIndex = npc.whoAmI;
+                    }
+                }
+            }
+
+            Projectile.localAI[1] = foundTarget ? targetIndex : -1;
 
             // friendly needs to be set to true so the minion can deal contact damage
             // friendly needs to be set to false so it doesn't damage things like target dummies while idling
@@ -267,22 +331,19 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         private void Movement(bool foundTarget, float distanceFromTarget, Vector2 targetCenter, float distanceToIdlePosition, Vector2 vectorToIdlePosition)
         {
             // Default movement parameters (here for attacking)
-            float speed = 200f;
-            float inertia = 20f;
+            float speed = 16f;
+            float inertia = 12f;
 
             if (foundTarget)
             {
                 // Minion has a target: attack (here, fly towards the enemy)
                 if (distanceFromTarget > 300f)
                 {
-                    for (int d = 0; d < 5; d++)
-                    {
-                        int dustIndex = Dust.NewDust(Projectile.Center, 0, 0, DustID.GemSapphire, 0f + Main.rand.Next(-1, 1), 0f + Main.rand.Next(-1, 1), 0, default, 2f);
-                        Main.dust[dustIndex].noGravity = true;
-                    }
-                    Projectile.scale = -0.5f;
-                    Projectile.position = targetCenter;
-                    Projectile.netUpdate = true;
+                    Vector2 direction = targetCenter - Projectile.Center;
+                    direction.Normalize();
+                    direction *= speed;
+
+                    Projectile.velocity = (Projectile.velocity * (inertia - 1f) + direction) / inertia;
                 }
                 else
                 {

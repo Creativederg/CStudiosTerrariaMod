@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using CStudios.Content.Buffs;
+using CStudios.Content.NPCs;
 using System;
 using Terraria;
 using Terraria.GameContent;
@@ -117,6 +118,11 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
         {
             target.immune[Projectile.owner] = 4;
+            var global = target.GetGlobalNPC<CStudiosGlobalNPC>();
+            if (!target.HasBuff(BuffType<EntropicCorruption>()))
+                global.EntropicStacks = 1;
+
+            target.AddBuff(BuffType<EntropicCorruption>(), 5 * 60);
             float dustAmount = 4f;
             float randomConstant = MathHelper.ToRadians(Main.rand.Next(0, 360));
             for (int i = 0; i < dustAmount; i++)

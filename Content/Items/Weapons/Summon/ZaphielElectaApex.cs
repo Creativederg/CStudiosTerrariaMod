@@ -58,6 +58,32 @@ namespace CStudios.Content.Items.Weapons.Summon
             return true;
         }
 
+        public override void HoldItem(Player player)
+        {
+            if (player.whoAmI != Main.myPlayer)
+                return;
+
+            // Ultimate: Q while holding this weapon
+            if (CStudios.UltimateKey.JustPressed
+                && !player.HasBuff(BuffType<PsybitOvercharge>())
+                && !player.HasBuff(BuffType<PsybitOverchargedCooldown>())
+                && player.ownedProjectileCounts[ProjectileType<Psybits>()] > 0)
+            {
+                player.AddBuff(BuffType<PsybitOvercharge>(), 10 * 60);           // 10 seconds
+                player.AddBuff(BuffType<PsybitOverchargedCooldown>(), 120 * 60);  // 2 minutes
+
+                SoundEngine.PlaySound(SoundID.Item113, player.Center); // or your charged SFX
+
+                // Optional: flash / dust on activate
+                for (int d = 0; d < 25; d++)
+                {
+                    Dust dust = Dust.NewDustPerfect(player.Center, DustID.Electric,
+                        Main.rand.NextVector2Circular(6f, 6f), 100, new Color(255, 50, 50), 1.5f);
+                    dust.noGravity = true;
+                }
+            }
+        }
+
         public override bool Shoot(Player player, EntitySource_ItemUse_WithAmmo source, Vector2 position, Vector2 velocity, int type, int damage, float knockback)
         {
             // ===== RIGHT CLICK =====
@@ -88,7 +114,27 @@ namespace CStudios.Content.Items.Weapons.Summon
                     return false;
                 }
 
-                // Subsequent right-clicks: charged beam (original behavior)
+                // Subsequent right-clicks: charged beam — despawn minions first
+                for (int i = 0; i < Main.maxProjectiles; i++)
+                {
+                    Projectile proj = Main.projectile[i];
+                    if (proj.active && proj.owner == player.whoAmI && proj.type == ProjectileType<Psybits>())
+                    {
+                        proj.Kill();
+                    }
+                }
+
+                // Also clean up any minion beams
+                for (int i = 0; i < Main.maxProjectiles; i++)
+                {
+                    Projectile proj = Main.projectile[i];
+                    if (proj.active && proj.owner == player.whoAmI && proj.type == ProjectileType<PsybitMinionBeam>())
+                    {
+                        proj.Kill();
+                    }
+                }
+                player.ClearBuff(BuffType<PsybitDefensiveArray>());
+
                 player.AddBuff(BuffType<PsybitBeamAttack>(), 3 * 60);
                 player.AddBuff(BuffType<PsybitLaserCooldown>(), 30 * 60);
 
@@ -104,22 +150,23 @@ namespace CStudios.Content.Items.Weapons.Summon
             }
 
             // ===== LEFT CLICK / CHANNEL: Tagging bullet =====
-            Projectile.NewProjectile(
-                player.GetSource_ItemUse(player.HeldItem),
-                player.Center.X, player.Center.Y,
-                0f, 0f,
-                ProjectileType<PsybitGunUncharged>(),
-                0, 0, player.whoAmI, 0f);
+            if (player.ownedProjectileCounts[ProjectileType<PsybitPlayerBeam>()] < 1)
+            {
+                Projectile.NewProjectile(
+                    player.GetSource_ItemUse(player.HeldItem),
+                    player.Center.X, player.Center.Y,
+                    velocity.X, velocity.Y,
+                    ProjectileType<PsybitPlayerBeam>(),
+                    damage, 0f, player.whoAmI);
 
-            SoundEngine.PlaySound(SoundID.Item125, player.Center);
-
-            Projectile.NewProjectile(
-                source,
-                position.X, position.Y,
-                velocity.X, velocity.Y,
-                ProjectileType<PsybitUnchargedLaser>(),
-                damage, 0f, player.whoAmI, 0f);
-
+                // Optional gun visual
+                Projectile.NewProjectile(
+                    player.GetSource_ItemUse(player.HeldItem),
+                    player.Center.X, player.Center.Y,
+                    0f, 0f,
+                    ProjectileType<PsybitGunUncharged>(),
+                    0, 0, player.whoAmI);
+            }
             return false;
         }
 

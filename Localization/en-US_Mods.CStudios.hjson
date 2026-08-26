@@ -3,6 +3,14 @@ Projectiles: {
 	PsybitMinion.DisplayName: Psybit Minion
 	PsybitChargedLaser.DisplayName: Psybit Charged Laser
 	PsybitChannelBeam.DisplayName: Psybit Channel Beam
+	PsybitGunCharged.DisplayName: Psybit Gun Charged
+	PsybitGunUncharged.DisplayName: Psybit Gun Uncharged
+	PsybitLaser.DisplayName: Psybit Laser
+	Psybits.DisplayName: Psybits
+	PsybitUnchargedLaser.DisplayName: Psybit Uncharged Laser
+	PsybitPlayerBeam.DisplayName: Psybit Player Beam
+	PsybitMinionBeam.DisplayName: Psybit Minion Beam
+	PsybitMinionChargedBeam.DisplayName: Psybit Minion Charged Beam
 }
 
 Items: {
@@ -10,12 +18,22 @@ Items: {
 		Tooltip: ""
 		DisplayName: Psychokinetic Array
 	}
+
+	ZaphielElectaApex: {
+		DisplayName: Zaphiel Electa Apex
+		Tooltip: ""
+	}
 }
 
 Buffs: {
 	PsybitOverchargedCooldown: {
 		Description: Mods.CStudios.Buffs.PsybitOverchargedCooldown.Description
 		DisplayName: Psybit Overcharged Cooldown
+	}
+
+	PsybitOvercharge: {
+		DisplayName: Psybit Overcharge
+		Description: Mods.CStudios.Buffs.PsybitOvercharge.Description
 	}
 
 	PsybitMinionBuff: {
@@ -37,7 +55,31 @@ Buffs: {
 		Description: Mods.CStudios.Buffs.EntropicCorruption.Description
 		DisplayName: Entropic Corruption
 	}
+
+	PsybitBeamAttack: {
+		DisplayName: Psybit Beam Attack
+		Description: Mods.CStudios.Buffs.PsybitBeamAttack.Description
+	}
+
+	PsybitDefensiveArray: {
+		DisplayName: Psybit Defensive Array
+		Description: Mods.CStudios.Buffs.PsybitDefensiveArray.Description
+	}
+
+	GundbitShieldBuff: {
+		DisplayName: Gundbit Shield Buff
+		Description: Mods.CStudios.Buffs.GundbitShieldBuff.Description
+	}
+
+	GundbitShieldCooldown: {
+		DisplayName: Gundbit Shield Cooldown
+		Description: Mods.CStudios.Buffs.GundbitShieldCooldown.Description
+	}
 }
 
 DamageClasses.PsychokineticDamageClass.DisplayName: Psychokinetic Damage Class
-"Keybinds.Psybit Overcharge.DisplayName": Psybit  Overcharge
+
+Keybinds: {
+	"Psybit Overcharge.DisplayName": Psybit  Overcharge
+	"Unleash Ultimate.DisplayName": Unleash  Ultimate
+}
