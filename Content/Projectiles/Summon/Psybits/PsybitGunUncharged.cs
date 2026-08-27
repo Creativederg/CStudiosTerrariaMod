@@ -26,8 +26,8 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         public override int MuzzleDistance => 62;
         //The distance the gun is relative to the player.
         public override float BaseDistance => 40;
-        public override int StartingState => 0;
-        public override bool KillOnIdle => true;
+        public override int StartingState => 2;
+        public override bool KillOnIdle => false;
         public override int ScreenShakeTime => 95;
         public override void SetStaticDefaults()
         {
@@ -44,6 +44,17 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         public override bool PreAI()
         {
             Player player = Main.player[Projectile.owner];
+
+            // Stay only while holding left click with this weapon
+            if (!player.active || player.dead
+                || !player.channel
+                || player.HeldItem.type != ModContent.ItemType<Items.Weapons.Summon.ZaphielElectaApex>())
+            {
+                Projectile.Kill();
+                return false;
+            }
+
+            Projectile.timeLeft = 2;
             DrawOriginOffsetY = -6;
             return true;
         }

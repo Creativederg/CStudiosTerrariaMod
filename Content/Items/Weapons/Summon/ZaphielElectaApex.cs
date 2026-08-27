@@ -149,17 +149,22 @@ namespace CStudios.Content.Items.Weapons.Summon
                 return false;
             }
 
-            // ===== LEFT CLICK / CHANNEL: Tagging bullet =====
+            // ===== LEFT CLICK / CHANNEL =====
             if (player.ownedProjectileCounts[ProjectileType<PsybitPlayerBeam>()] < 1)
             {
+                Vector2 dir = velocity.SafeNormalize(Vector2.UnitX);
+
                 Projectile.NewProjectile(
-                    player.GetSource_ItemUse(player.HeldItem),
-                    player.Center.X, player.Center.Y,
-                    velocity.X, velocity.Y,
+                    source,
+                    player.Center,
+                    dir,
                     ProjectileType<PsybitPlayerBeam>(),
                     damage, 0f, player.whoAmI);
+            }
 
-                // Optional gun visual
+            // Gun visual: spawn once, stays while channeling
+            if (player.ownedProjectileCounts[ProjectileType<PsybitGunUncharged>()] < 1)
+            {
                 Projectile.NewProjectile(
                     player.GetSource_ItemUse(player.HeldItem),
                     player.Center.X, player.Center.Y,
@@ -167,6 +172,7 @@ namespace CStudios.Content.Items.Weapons.Summon
                     ProjectileType<PsybitGunUncharged>(),
                     0, 0, player.whoAmI);
             }
+
             return false;
         }
 

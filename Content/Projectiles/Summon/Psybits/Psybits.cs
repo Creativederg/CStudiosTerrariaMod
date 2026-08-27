@@ -1,28 +1,33 @@
-﻿
-using Microsoft.Xna.Framework;
-
+﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Terraria;
+using Terraria.GameContent;
 using Terraria.ID;
+using Terraria.ModLoader;
 using static Terraria.ModLoader.ModContent;
 using System;
-using Terraria.ModLoader;
-using Terraria.Audio;
 using CStudios.Content.Buffs;
 using CStudios.Content.DamageClasses;
-using CStudios.Content.Projectiles.Summon.Psybits;
+using CStudios.Content.Systems.ZaphielModules;
+using CStudios.Content.Utilities;
 
 namespace CStudios.Content.Projectiles.Summon.Psybits
 {
-
     public class Psybits : ModProjectile
     {
+        public ref float PsybitID => ref Projectile.ai[2]; // 0..10
+
+        float damageBonus = 1f;
+
+        // localAI[0] = overcharge assemble 0..1
+        // localAI[1] = target NPC whoAmI (-1 if none)
+
         public override void SetStaticDefaults()
         {
             Main.projFrames[Projectile.type] = 11;
-            //ProjectileID.Sets.Homing[Projectile.type] = true;
-
-            ProjectileID.Sets.TrailCacheLength[Projectile.type] = 40;    //The length of old position to be recorded
-            ProjectileID.Sets.TrailingMode[Projectile.type] = 3;        //The recording mode
+            ProjectileID.Sets.TrailCacheLength[Projectile.type] = 40;
+            ProjectileID.Sets.TrailingMode[Projectile.type] = 3;
+            ProjectileID.Sets.MinionTargettingFeature[Projectile.type] = true;
         }
 
         public override void SetDefaults()
@@ -38,142 +43,317 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             Projectile.ignoreWater = true;
             Projectile.minion = true;
             Projectile.minionSlots = 1f;
+        }
 
-            //ProjectileType<TakodachiRound>();
-        }
-        public ref float PsybitID => ref Projectile.ai[2];//As there are 11 Psybits, some act differently to keep things unique
+        public override bool? CanCutTiles() => false;
 
-        float damageBonus = 1f;
-        public override bool? CanCutTiles()
-        {
-            return false;
-        }
-        public override bool PreDraw(ref Color lightColor)
-        {
-            default(Content.Effects.RedTrail).Draw(Projectile);
-            return true;
-        }
-        // This is mandatory if your minion deals contact damage (further related stuff in AI() in the Movement region)
         public override bool MinionContactDamage()
         {
+            Player owner = Main.player[Projectile.owner];
+            return ZaphielModuleSystem.Resolve(owner).MeleeMode;
+        }
+
+        public override bool PreDraw(ref Color lightColor)
+        {
+            Player owner = Main.player[Projectile.owner];
+            bool overcharged = owner.HasBuff(BuffType<PsybitOvercharge>());
+
+            default(Content.Effects.RedTrail).Draw(Projectile);
+
+            if (!overcharged)
+            {
+                Texture2D sheet = TextureAssets.Projectile[Type].Value;
+                int frameHeight = sheet.Height / Main.projFrames[Type];
+                Rectangle frame = new Rectangle(0, frameHeight * Projectile.frame, sheet.Width, frameHeight);
+
+                Vector2 origin = frame.Size() / 2f;
+                SpriteEffects effects = Projectile.spriteDirection == -1
+                    ? SpriteEffects.FlipHorizontally
+                    : SpriteEffects.None;
+                Vector2 drawPos = Projectile.Center - Main.screenPosition + new Vector2(0f, Projectile.gfxOffY);
+                float alpha = (255 - Projectile.alpha) / 255f;
+
+                Main.EntitySpriteDraw(
+                    sheet, drawPos, frame,
+                    lightColor * alpha,
+                    Projectile.rotation, origin, Projectile.scale,
+                    effects, 0);
+
+                return false;
+            }
+
+            // Overcharge layered assembly
+            Texture2D[] bits = new Texture2D[11];
+            for (int i = 0; i < 11; i++)
+                bits[i] = Request<Texture2D>($"CStudios/Content/Projectiles/Summon/Psybits/Psybit{i + 1}").Value;
+
+            int[] map = { 3, 4, 5, 0, 1, 2, 6, 7, 8, 9, 10 };
+
+            float spread = 6f;
+            Vector2[] finalOffsets =
+            {
+                new Vector2(0f, -spread),
+                new Vector2(0f, spread),
+                new Vector2(spread, 0f),
+                new Vector2(0f, -spread * 0.5f),
+                new Vector2(0f, spread * 0.5f),
+                new Vector2(-spread * 0.5f, 0f),
+                new Vector2(spread * 0.35f, -spread * 0.35f),
+                new Vector2(-spread * 0.35f, 0f),
+                new Vector2(-spread * 0.35f, spread * 0.25f),
+                new Vector2(0f, spread * 0.75f),
+                new Vector2(0f, -spread * 0.75f),
+            };
+
+            Vector2[] startOffsets = new Vector2[11];
+            for (int i = 0; i < 11; i++)
+                startOffsets[i] = finalOffsets[i] * 5f;
+
+            float assemble = MathHelper.Clamp(Projectile.localAI[0], 0f, 1f);
+
+            float rotation = MathHelper.PiOver2;
+            int targetId = (int)Projectile.localAI[1];
+            if (targetId >= 0 && targetId < Main.maxNPCs && Main.npc[targetId].active)
+            {
+                Vector2 toTarget = Main.npc[targetId].Center - Projectile.Center;
+                if (toTarget.LengthSquared() > 1f)
+                    rotation = toTarget.ToRotation() + MathHelper.Pi;
+            }
+
+            SpriteEffects spriteEffects = Projectile.spriteDirection <= 0
+                ? SpriteEffects.FlipHorizontally
+                : SpriteEffects.None;
+
+            Color drawColor = new Color(255, 90, 90) * ((255 - Projectile.alpha) / 255f);
+            float scale = Projectile.scale * (1.1f + 0.04f * (float)Math.Sin(Main.GlobalTimeWrappedHourly * 8f));
+            Vector2 center = Projectile.Center - Main.screenPosition + new Vector2(0f, Projectile.gfxOffY);
+
+            for (int i = 0; i < 11; i++)
+            {
+                float layerDelay = i * 0.04f;
+                float layerT = MathHelper.Clamp((assemble - layerDelay) / Math.Max(0.01f, 1f - layerDelay * 0.5f), 0f, 1f);
+                layerT = EaseHelper.InOutQuad(layerT);
+
+                Vector2 useOff = Vector2.Lerp(startOffsets[i], finalOffsets[i], layerT);
+                Vector2 rotatedOffset = useOff.RotatedBy(rotation - MathHelper.Pi);
+
+                Texture2D tex = bits[map[i]];
+                Rectangle frame = tex.Frame();
+                Vector2 origin = frame.Size() / 2f;
+
+                Main.EntitySpriteDraw(
+                    tex, center + rotatedOffset, frame,
+                    drawColor * layerT,
+                    rotation, origin, scale, spriteEffects, 0);
+            }
+
+            int coreIndex = Utils.Clamp((int)PsybitID, 0, 10);
+            Texture2D core = bits[coreIndex];
+            Main.EntitySpriteDraw(
+                core, center, core.Frame(),
+                new Color(255, 40, 40, 0) * (0.45f * assemble),
+                rotation, core.Frame().Size() / 2f, scale * 1.25f, spriteEffects, 0);
+
             return false;
         }
 
-        // The AI of this minion is split into multiple methods to avoid bloat. This method just passes values between calls actual parts of the AI.
         public override void AI()
         {
             Player owner = Main.player[Projectile.owner];
 
             ProjectileID.Sets.TrailCacheLength[Projectile.type] = 40;
             if (!CheckActive(owner))
-            {
                 return;
-            }
-            // In AI(), after CheckActive:
-            if (owner.HasBuff(BuffType<PsybitOvercharge>()))
-            {
-                // Visual: brighter / different frame, still same movement
-                Projectile.alpha = 0;
-                if (Main.rand.NextBool(2))
-                {
-                    Dust d = Dust.NewDustPerfect(Projectile.Center, DustID.Electric,
-                        Main.rand.NextVector2Circular(2f, 2f), 100, new Color(255, 40, 40), 1.2f);
-                    d.noGravity = true;
-                }
-            }
 
             Projectile.frame = (int)PsybitID;
-            GeneralBehavior(owner, out Vector2 vectorToIdlePosition, out float distanceToIdlePosition);
-            SearchForTargets(owner, out bool foundTarget, out float distanceFromTarget, out Vector2 targetCenter);
-            Movement(foundTarget, distanceFromTarget, targetCenter, distanceToIdlePosition, vectorToIdlePosition);
-            Visuals();
-            Projectile.alpha -= 3;
-            if (Projectile.scale < 0)
-            {
-                Projectile.alpha = 255;
-            }
-            Projectile.scale += 0.02f;
-            Projectile.scale = Math.Clamp(Projectile.scale, -1, 1);
-            // Continuous beam while we have a target in range
-            if (foundTarget && distanceFromTarget < 500f)
-            {
-                bool overcharged = owner.HasBuff(BuffType<PsybitOvercharge>());
-                int beamType = overcharged
-                    ? ProjectileType<PsybitMinionChargedBeam>()
-                    : ProjectileType<PsybitMinionBeam>();
 
-                bool hasBeam = false;
-                for (int i = 0; i < Main.maxProjectiles; i++)
-                {
-                    Projectile p = Main.projectile[i];
-                    if (p.active && p.owner == Projectile.owner
-                        && (int)p.ai[1] == Projectile.whoAmI
-                        && (p.type == ProjectileType<PsybitMinionBeam>()
-                            || p.type == ProjectileType<PsybitMinionChargedBeam>()))
-                    {
-                        // Wrong mode still active (e.g. ultimate just started/ended) → replace
-                        if (p.type != beamType)
-                            p.Kill();
-                        else
-                            hasBeam = true;
-                        break;
-                    }
-                }
+            // Module context (Lance Matrix)
+            ZaphielShootContext ctx = ZaphielModuleSystem.Resolve(owner);
 
-                if (!hasBeam && Projectile.owner == Main.myPlayer)
-                {
-                    int index = Projectile.NewProjectile(
-                        Projectile.GetSource_FromThis(),
-                        Projectile.Center, Vector2.Zero,
-                        beamType,
-                        (int)(Projectile.damage * (overcharged ? 2.5f : damageBonus)), // stronger in ultimate
-                        0f, owner.whoAmI,
-                        0f, Projectile.whoAmI);
-                    Main.projectile[index].originalDamage = Projectile.damage;
-                }
-            }
-            if (Projectile.scale >= 1f)
+            if (owner.HasBuff(BuffType<PsybitOvercharge>()))
             {
-                Projectile.ai[0]++;
+                Projectile.localAI[0] += 0.035f;
+                if (Projectile.localAI[0] > 1f)
+                    Projectile.localAI[0] = 1f;
             }
             else
             {
+                Projectile.localAI[0] = 0f;
+            }
+
+            GeneralBehavior(owner, out Vector2 vectorToIdlePosition, out float distanceToIdlePosition);
+            SearchForTargets(owner, ctx, out bool foundTarget, out float distanceFromTarget, out Vector2 targetCenter);
+            Movement(owner, ctx, foundTarget, distanceFromTarget, targetCenter, distanceToIdlePosition, vectorToIdlePosition);
+            Visuals();
+            HandleOffense(owner, ctx, foundTarget, distanceFromTarget, targetCenter);
+
+            Projectile.alpha -= 3;
+            if (Projectile.scale < 0)
+                Projectile.alpha = 255;
+
+            Projectile.scale += 0.02f;
+            Projectile.scale = Math.Clamp(Projectile.scale, -1f, 1f);
+
+            if (Projectile.scale >= 1f)
+                Projectile.ai[0]++;
+            else
                 Projectile.ai[0] = 0;
 
-            }
+            // Player charged cannon: hide bits
             if (owner.HasBuff(BuffType<PsybitBeamAttack>()))
             {
                 if (Projectile.alpha <= 200)
                 {
                     for (int d = 0; d < 5; d++)
                     {
-                        int dustIndex = Dust.NewDust(Projectile.Center, 0, 0, DustID.GemSapphire, 0f + Main.rand.Next(-1, 1), 0f + Main.rand.Next(-1, 1), 0, default, 2f);
+                        int dustIndex = Dust.NewDust(Projectile.Center, 0, 0, DustID.GemSapphire,
+                            Main.rand.Next(-1, 1), Main.rand.Next(-1, 1), 0, default, 2f);
                         Main.dust[dustIndex].noGravity = true;
                     }
                 }
                 Projectile.alpha = 255;
                 Projectile.ai[0] = Main.rand.Next(-20, 20);
+                Projectile.scale = -0.5f;
                 Projectile.ai[1] = Main.rand.Next(0, 360);
             }
-            else
-            {
 
+            if (owner.HasBuff(BuffType<PsybitOvercharge>()) && Main.rand.NextBool(2))
+            {
+                Dust d = Dust.NewDustPerfect(Projectile.Center, DustID.Electric,
+                    Main.rand.NextVector2Circular(2f, 2f), 100, new Color(255, 40, 40), 1.1f);
+                d.noGravity = true;
             }
         }
 
+        /// <summary>Beams or melee depending on modules / overcharge.</summary>
+        private void HandleOffense(Player owner, ZaphielShootContext ctx, bool foundTarget,
+            float distanceFromTarget, Vector2 targetCenter)
+        {
+            if (owner.HasBuff(BuffType<PsybitBeamAttack>()))
+                return;
 
-        // This is the "active check", makes sure the minion is alive while the player is alive, and despawns if not
+            // Melee module mode
+            if (ctx.MeleeMode)
+            {
+                ClearLinkedBeams(owner);
+
+                if (!foundTarget)
+                    return;
+
+                float meleeRange = 100f * ctx.MeleeRangeMul;
+                if (distanceFromTarget > meleeRange)
+                    return;
+
+                int interval = Math.Max(8, ctx.MeleeStrikeInterval);
+                if (Projectile.ai[0] < interval)
+                    return;
+
+                Projectile.ai[0] = 0;
+
+                if (Projectile.owner == Main.myPlayer)
+                {
+                    int dmg = Math.Max(1, (int)(Projectile.damage * ctx.MinionDamageMul * ctx.DamageMul * damageBonus));
+                    Vector2 toTarget = (targetCenter - Projectile.Center).SafeNormalize(Vector2.UnitX);
+
+                    int idx = Projectile.NewProjectile(
+                        Projectile.GetSource_FromThis(),
+                        Projectile.Center,
+                        toTarget,
+                        ProjectileType<PsybitUnchargedLaser>(), // swap for ZaphielMinionMeleeHitbox if you add it
+                        dmg,
+                        2f,
+                        owner.whoAmI);
+
+                    if (idx >= 0)
+                    {
+                        Main.projectile[idx].timeLeft = 10;
+                        Main.projectile[idx].penetrate = -1;
+                        Main.projectile[idx].velocity *= 0.2f;
+                        Main.projectile[idx].extraUpdates = 0;
+                    }
+                }
+                return;
+            }
+
+            // Beam mode
+            float maxRange = 500f * ctx.MinionFireRangeMul;
+            if (!foundTarget || distanceFromTarget >= maxRange)
+                return;
+
+            bool overcharged = owner.HasBuff(BuffType<PsybitOvercharge>());
+            bool forceCharged = overcharged || ctx.MinionUseChargedBeam;
+
+            int beamType = forceCharged
+                ? ProjectileType<PsybitMinionChargedBeam>()
+                : ProjectileType<PsybitMinionBeam>();
+
+            // Core/relay override (not during ultimate)
+            if (!overcharged && ctx.OverrideProjectileType > 0)
+                beamType = ctx.OverrideProjectileType;
+
+            bool hasBeam = false;
+            for (int i = 0; i < Main.maxProjectiles; i++)
+            {
+                Projectile p = Main.projectile[i];
+                if (!p.active || p.owner != Projectile.owner)
+                    continue;
+                if ((int)p.ai[1] != Projectile.whoAmI)
+                    continue;
+
+                if (p.type == ProjectileType<PsybitMinionBeam>()
+                    || p.type == ProjectileType<PsybitMinionChargedBeam>()
+                    || (ctx.OverrideProjectileType > 0 && p.type == ctx.OverrideProjectileType))
+                {
+                    if (p.type != beamType)
+                        p.Kill();
+                    else
+                        hasBeam = true;
+                    break;
+                }
+            }
+
+            if (!hasBeam && Projectile.owner == Main.myPlayer)
+            {
+                float mult = (overcharged ? 2.5f : damageBonus) * ctx.MinionDamageMul * ctx.DamageMul;
+                int index = Projectile.NewProjectile(
+                    Projectile.GetSource_FromThis(),
+                    Projectile.Center, Vector2.Zero,
+                    beamType,
+                    Math.Max(1, (int)(Projectile.damage * mult)),
+                    0f, owner.whoAmI,
+                    0f, Projectile.whoAmI);
+
+                if (index >= 0)
+                {
+                    Main.projectile[index].originalDamage = Projectile.damage;
+                    Main.projectile[index].penetrate += ctx.ExtraPierce;
+                }
+            }
+        }
+
+        private void ClearLinkedBeams(Player owner)
+        {
+            for (int i = 0; i < Main.maxProjectiles; i++)
+            {
+                Projectile p = Main.projectile[i];
+                if (!p.active || p.owner != owner.whoAmI)
+                    continue;
+                if ((int)p.ai[1] != Projectile.whoAmI)
+                    continue;
+
+                if (p.type == ProjectileType<PsybitMinionBeam>()
+                    || p.type == ProjectileType<PsybitMinionChargedBeam>())
+                    p.Kill();
+            }
+        }
+
         private bool CheckActive(Player owner)
         {
             if (owner.dead || !owner.active)
-            {
                 return false;
-            }
 
             if (owner.HasBuff(BuffType<PsybitDefensiveArray>()))
-            {
                 Projectile.timeLeft = 2;
-            }
 
             return true;
         }
@@ -181,74 +361,58 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         private void GeneralBehavior(Player owner, out Vector2 vectorToIdlePosition, out float distanceToIdlePosition)
         {
             Vector2 idlePosition = owner.Center;
-            idlePosition.Y -= 48f; // Go up 48 coordinates (three tiles from the center of the player)
+            idlePosition.Y -= 48f;
+            idlePosition.X += (10 + Projectile.minionPos * 40) * -owner.direction;
 
-            // If your minion doesn't aimlessly move around when it's idle, you need to "put" it into the line of other summoned minions
-            // The index is projectile.minionPos
-            float minionPositionOffsetX = (10 + Projectile.minionPos * 40) * -owner.direction;
-            idlePosition.X += minionPositionOffsetX; // Go behind the player
-
-            // All of this code below this line is adapted from Spazmamini code (ID 388, aiStyle 66)
-
-            // Teleport to player if distance is too big
             vectorToIdlePosition = idlePosition - Projectile.Center;
             distanceToIdlePosition = vectorToIdlePosition.Length();
 
             if (Main.myPlayer == owner.whoAmI && distanceToIdlePosition > 2000f)
             {
-                // Whenever you deal with non-regular events that change the behavior or position drastically, make sure to only run the code on the owner of the projectile,
-                // and then set netUpdate to true
                 Projectile.position = idlePosition;
                 Projectile.velocity *= 0.1f;
                 Projectile.netUpdate = true;
             }
 
-            // If your minion is flying, you want to do this independently of any conditions
             float overlapVelocity = 0.04f;
-
-            // Fix overlap with other minions
             for (int i = 0; i < Main.maxProjectiles; i++)
             {
                 Projectile other = Main.projectile[i];
-
-                if (i != Projectile.whoAmI && other.active && other.owner == Projectile.owner && Math.Abs(Projectile.position.X - other.position.X) + Math.Abs(Projectile.position.Y - other.position.Y) < Projectile.width)
+                if (i != Projectile.whoAmI && other.active && other.owner == Projectile.owner
+                    && Math.Abs(Projectile.position.X - other.position.X)
+                     + Math.Abs(Projectile.position.Y - other.position.Y) < Projectile.width)
                 {
                     if (Projectile.position.X < other.position.X)
-                    {
                         Projectile.velocity.X -= overlapVelocity;
-                    }
                     else
-                    {
                         Projectile.velocity.X += overlapVelocity;
-                    }
 
                     if (Projectile.position.Y < other.position.Y)
-                    {
                         Projectile.velocity.Y -= overlapVelocity;
-                    }
                     else
-                    {
                         Projectile.velocity.Y += overlapVelocity;
-                    }
                 }
             }
         }
 
-        private void SearchForTargets(Player owner, out bool foundTarget, out float distanceFromTarget, out Vector2 targetCenter)
+        private void SearchForTargets(Player owner, ZaphielShootContext ctx,
+            out bool foundTarget, out float distanceFromTarget, out Vector2 targetCenter)
         {
-            distanceFromTarget = 1200f;
+            float baseRange = ctx.MinionAggressiveChase ? 1400f : 1200f;
+            distanceFromTarget = baseRange;
             targetCenter = Projectile.Center;
             foundTarget = false;
             int targetIndex = -1;
 
-            // 1) Player right-click target
+            float rangeMul = ctx.MinionFireRangeMul;
+
             if (owner.HasMinionAttackTargetNPC)
             {
                 NPC npc = Main.npc[owner.MinionAttackTargetNPC];
                 if (npc.CanBeChasedBy())
                 {
                     float between = Vector2.Distance(npc.Center, Projectile.Center);
-                    if (between < 2000f)
+                    if (between < 2000f * rangeMul)
                     {
                         distanceFromTarget = between;
                         targetCenter = npc.Center;
@@ -258,7 +422,6 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                 }
             }
 
-            // 2) Marked enemies
             if (!foundTarget)
             {
                 for (int i = 0; i < Main.maxNPCs; i++)
@@ -278,7 +441,6 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                 }
             }
 
-            // 3) Stick to last target after mark expires
             if (!foundTarget && Projectile.localAI[1] >= 0)
             {
                 int last = (int)Projectile.localAI[1];
@@ -288,7 +450,8 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                     if (npc.active && npc.CanBeChasedBy())
                     {
                         float between = Vector2.Distance(npc.Center, Projectile.Center);
-                        if (between < 1500f)
+                        float leash = (ctx.MinionAggressiveChase ? 2000f : 1500f) * rangeMul;
+                        if (between < leash)
                         {
                             distanceFromTarget = between;
                             targetCenter = npc.Center;
@@ -299,9 +462,9 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                 }
             }
 
-            // 4) Fallback: any nearby enemy
             if (!foundTarget)
             {
+                float fallback = 800f * rangeMul;
                 for (int i = 0; i < Main.maxNPCs; i++)
                 {
                     NPC npc = Main.npc[i];
@@ -309,7 +472,7 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                         continue;
 
                     float between = Vector2.Distance(npc.Center, Projectile.Center);
-                    if (between < 800f && between < distanceFromTarget)
+                    if (between < fallback && between < distanceFromTarget)
                     {
                         distanceFromTarget = between;
                         targetCenter = npc.Center;
@@ -320,182 +483,115 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             }
 
             Projectile.localAI[1] = foundTarget ? targetIndex : -1;
-
-            // friendly needs to be set to true so the minion can deal contact damage
-            // friendly needs to be set to false so it doesn't damage things like target dummies while idling
-            // Both things depend on if it has a target or not, so it's just one assignment here
-            // You don't need this assignment if your minion is shooting things instead of dealing contact damage
-            //Projectile.friendly = foundTarget;
         }
 
-        private void Movement(bool foundTarget, float distanceFromTarget, Vector2 targetCenter, float distanceToIdlePosition, Vector2 vectorToIdlePosition)
+        private void Movement(Player owner, ZaphielShootContext ctx, bool foundTarget,
+            float distanceFromTarget, Vector2 targetCenter,
+            float distanceToIdlePosition, Vector2 vectorToIdlePosition)
         {
-            // Default movement parameters (here for attacking)
-            float speed = 16f;
-            float inertia = 12f;
+            bool overcharged = owner.HasBuff(BuffType<PsybitOvercharge>());
+            float moveMul = ctx.MinionMoveSpeedMul;
+            float orbitMul = ctx.MinionOrbitRadiusMul;
+
+            // Melee: close in harder
+            float engageDistance = ctx.MeleeMode ? 90f : 300f;
 
             if (foundTarget)
             {
-                // Minion has a target: attack (here, fly towards the enemy)
-                if (distanceFromTarget > 300f)
+                if (distanceFromTarget > engageDistance)
                 {
-                    Vector2 direction = targetCenter - Projectile.Center;
-                    direction.Normalize();
-                    direction *= speed;
-
+                    float speed = (ctx.MeleeMode ? 20f : 16f) * moveMul;
+                    float inertia = 12f;
+                    Vector2 direction = (targetCenter - Projectile.Center).SafeNormalize(Vector2.Zero) * speed;
                     Projectile.velocity = (Projectile.velocity * (inertia - 1f) + direction) / inertia;
+                    Projectile.rotation = Vector2.Normalize(targetCenter - Projectile.Center).ToRotation()
+                        + MathHelper.ToRadians(90f);
+                }
+                else if (PsybitID <= 6)
+                {
+                    double deg = Projectile.ai[1];
+                    double rad = deg * (Math.PI / 180);
+                    double dist = (100 + PsybitID * 15) * orbitMul;
+                    Vector2 adjustedPosition = targetCenter;
+
+                    if (PsybitID <= 3)
+                        Projectile.position.Y = adjustedPosition.Y - (int)(Math.Sin(rad) * dist / 2) - Projectile.height / 2;
+                    else
+                        Projectile.position.Y = adjustedPosition.Y - (int)(Math.Sin(rad) * dist) - Projectile.height / 2;
+
+                    Projectile.position.X = adjustedPosition.X - (int)(Math.Cos(rad) * dist) - Projectile.width / 2;
+
+                    if (PsybitID <= 2)
+                        Projectile.ai[1] -= 0.9f;
+                    else
+                        Projectile.ai[1] += 0.9f;
+
+                    Projectile.rotation = Vector2.Normalize(targetCenter - Projectile.Center).ToRotation()
+                        + MathHelper.ToRadians(90f);
                 }
                 else
                 {
-                    //Orbit the enemy
-                    if (PsybitID <= 6)
-                    {
-                        //Factors for calculations
-                        double deg = Projectile.ai[1]; //The degrees, you can multiply projectile.ai[1] to make it orbit faster, may be choppy depending on the value
-                        double rad = deg * (Math.PI / 180); //Convert degrees to radians
-                        double dist = 100 + PsybitID * 15; //Distance away from the target
-                        Vector2 adjustedPosition = targetCenter;
+                    double deg = Projectile.ai[1];
+                    double rad = deg * (Math.PI / 180);
+                    double dist = (100 + PsybitID * 10) * orbitMul;
+                    Vector2 adjustedPosition = targetCenter;
 
-                        /*Position the player based on where the player is, the Sin/Cos of the angle times the /
-						/distance for the desired distance away from the player minus the projectile's width   /
-						/and height divided by two so the center of the projectile is at the right place.     */
-                        if (PsybitID <= 3)
-                        {
-                            Projectile.position.Y = adjustedPosition.Y - (int)(Math.Sin(rad) * dist / 2) - Projectile.height / 2;
-
-                        }
-                        else
-                        {
-                            Projectile.position.Y = adjustedPosition.Y - (int)(Math.Sin(rad) * dist) - Projectile.height / 2;
-
-                        }
+                    if (PsybitID >= 9)
+                        Projectile.position.X = adjustedPosition.X - (int)(Math.Cos(rad) * dist / 2) - Projectile.width / 2;
+                    else
                         Projectile.position.X = adjustedPosition.X - (int)(Math.Cos(rad) * dist) - Projectile.width / 2;
 
-                        //Increase the counter/angle in degrees by 1 point, you can change the rate here too, but the orbit may look choppy depending on the value
-                        if (PsybitID <= 2)
-                        {
-                            Projectile.ai[1] -= 0.9f;
+                    Projectile.position.Y = adjustedPosition.Y - (int)(Math.Sin(rad) * dist) - Projectile.height / 2;
 
-                        }
-                        else
-                        {
-                            Projectile.ai[1] += 0.9f;
-
-                        }
-
-                        Projectile.rotation = Vector2.Normalize(targetCenter - Projectile.Center).ToRotation() + MathHelper.ToRadians(90f);
-                    }
+                    if (PsybitID >= 10)
+                        Projectile.ai[1] += 0.9f;
                     else
-                    {
-                        //Factors for calculations
-                        double deg = Projectile.ai[1]; //The degrees, you can multiply projectile.ai[1] to make it orbit faster, may be choppy depending on the value
-                        double rad = deg * (Math.PI / 180); //Convert degrees to radians
-                        double dist = 100 + PsybitID * 10; //Distance away from the target
-                        Vector2 adjustedPosition = targetCenter;
+                        Projectile.ai[1] -= 0.9f;
 
-                        /*Position the player based on where the player is, the Sin/Cos of the angle times the /
-						/distance for the desired distance away from the player minus the projectile's width   /
-						/and height divided by two so the center of the projectile is at the right place.     */
-                        if (PsybitID >= 9)
-                        {
-                            Projectile.position.X = adjustedPosition.X - (int)(Math.Cos(rad) * dist / 2) - Projectile.width / 2;
-
-                        }
-                        else
-                        {
-                            Projectile.position.X = adjustedPosition.X - (int)(Math.Cos(rad) * dist) - Projectile.width / 2;
-
-                        }
-                        Projectile.position.Y = adjustedPosition.Y - (int)(Math.Sin(rad) * dist) - Projectile.height / 2;
-
-                        //Increase the counter/angle in degrees by 1 point, you can change the rate here too, but the orbit may look choppy depending on the value
-                        if (PsybitID >= 10)
-                        {
-                            Projectile.ai[1] += 0.9f;
-
-                        }
-                        else
-                        {
-                            Projectile.ai[1] -= 0.9f;
-
-                        }
-
-                        Projectile.rotation = Vector2.Normalize(targetCenter - Projectile.Center).ToRotation() + MathHelper.ToRadians(90f);
-                    }
-
-
+                    Projectile.rotation = Vector2.Normalize(targetCenter - Projectile.Center).ToRotation()
+                        + MathHelper.ToRadians(90f);
                 }
             }
             else
             {
+                double deg = Projectile.ai[1];
+                double rad = deg * (Math.PI / 180);
+                double dist = 100 * orbitMul;
+                Vector2 adjustedPosition = owner.Center;
 
-                //Projectile.alpha = 170;
-                //Factors for calculations
-                double deg = Projectile.ai[1]; //The degrees, you can multiply projectile.ai[1] to make it orbit faster, may be choppy depending on the value
-                double rad = deg * (Math.PI / 180); //Convert degrees to radians
-                double dist = 100; //Distance away from the target
-                Vector2 adjustedPosition = Main.player[Projectile.owner].Center;
-
-                /*Position the player based on where the player is, the Sin/Cos of the angle times the /
-				/distance for the desired distance away from the player minus the projectile's width   /
-				/and height divided by two so the center of the projectile is at the right place.     */
                 if (PsybitID >= 9)
-                {
                     Projectile.position.X = adjustedPosition.X - (int)(Math.Cos(rad) * dist / 2) - Projectile.width / 2;
-
-                }
                 else
-                {
                     Projectile.position.X = adjustedPosition.X - (int)(Math.Cos(rad) * dist) - Projectile.width / 2;
 
-                }
                 if (PsybitID <= 3)
-                {
                     Projectile.position.Y = adjustedPosition.Y - (int)(Math.Sin(rad) * dist / 2) - Projectile.height / 2;
-
-                }
                 else
-                {
                     Projectile.position.Y = adjustedPosition.Y - (int)(Math.Sin(rad) * dist) - Projectile.height / 2;
 
-                }
-
-                //Increase the counter/angle in degrees by 1 point, you can change the rate here too, but the orbit may look choppy depending on the value
-                if (PsybitID % 2 == 0)
-                {
+                if ((int)PsybitID % 2 == 0)
                     Projectile.ai[1] += 0.9f;
+                else
+                    Projectile.ai[1] -= 0.9f;
+
+                if (overcharged)
+                {
+                    Projectile.rotation = MathHelper.PiOver2;
                 }
                 else
                 {
-                    Projectile.ai[1] -= 0.9f;
-
+                    Projectile.rotation = Vector2.Normalize(Main.MouseWorld - Projectile.Center).ToRotation()
+                        + MathHelper.ToRadians(90f);
                 }
-
-                Projectile.rotation = Vector2.Normalize(Main.MouseWorld - Projectile.Center).ToRotation() + MathHelper.ToRadians(90f);
             }
         }
 
         private void Visuals()
         {
-            //Projectile.rotation = Projectile.velocity.X * 0.05f;
-
-            //Projectile.rotation = Projectile.velocity.ToRotation() + MathHelper.PiOver2;
-            // This is a simple "loop through all frames from top to bottom" animation
-            int frameSpeed = 5;
-
-
             if (Projectile.velocity.X > 0f)
-            {
                 Projectile.spriteDirection = Projectile.direction = -1;
-            }
             else if (Projectile.velocity.X < 0f)
-            {
                 Projectile.spriteDirection = Projectile.direction = 1;
-            }
-
-            // Some visuals here
-            //Lighting.AddLight(Projectile.Center, Color.White.ToVector3() * 0.78f);
         }
     }
 }
-
