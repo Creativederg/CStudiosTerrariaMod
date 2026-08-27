@@ -34,7 +34,7 @@ namespace CStudios.Content.Items.Weapons.Summon
             Item.autoReuse = true;
             Item.noUseGraphic = true;
             Item.noMelee = true;
-            Item.channel = true;
+            Item.channel = false;
             Item.shoot = ProjectileID.WoodenArrowFriendly;
             Item.shootSpeed = 18f;
             Item.mana = 6;
@@ -77,10 +77,19 @@ namespace CStudios.Content.Items.Weapons.Summon
             });
 
             tooltips.Add(new TooltipLine(Mod, "OmegaModules",
-                "Press K to open Lance Matrix (Spearhead / Guidance / Energy Core / Energy Relay / Psybits)")
+                "Press K — Lance Matrix. Spearhead: Apex Edge (melee) or Splinter Beam (beam).")
             {
                 OverrideColor = new Color(255, 120, 160)
             });
+
+            if (ModLoader.HasMod("CalamityOverhaul"))
+            {
+                tooltips.Add(new TooltipLine(Mod, "OmegaCWR",
+                    "Default left click: CWR cyber trace volleys")
+                {
+                    OverrideColor = new Color(100, 200, 255)
+                });
+            }
         }
 
         public override bool AltFunctionUse(Player player) => true;
@@ -99,8 +108,22 @@ namespace CStudios.Content.Items.Weapons.Summon
         public override void HoldItem(Player player)
         {
             var ctx = ZaphielModuleSystem.Resolve(player);
-            Item.channel = !ctx.MeleeMode;
-            Item.noUseGraphic = !ctx.MeleeMode;
+
+            // Only channel when a module enables sustained beam
+            bool spearheadBeam = ctx.ContinuousBeam && !ctx.MeleeMode;
+
+            if (ctx.MeleeMode)
+            {
+                Item.noUseGraphic = false;
+                Item.channel = false;
+                Item.useStyle = ItemUseStyleID.Swing;
+            }
+            else
+            {
+                Item.noUseGraphic = true;
+                Item.useStyle = ItemUseStyleID.Shoot;
+                Item.channel = spearheadBeam;
+            }
 
             if (player.whoAmI != Main.myPlayer)
                 return;
@@ -120,7 +143,7 @@ namespace CStudios.Content.Items.Weapons.Summon
         public override bool Shoot(Player player, EntitySource_ItemUse_WithAmmo source,
             Vector2 position, Vector2 velocity, int type, int damage, float knockback)
         {
-            // ----- Right click: summon / charged -----
+            // ===== RIGHT CLICK: summon / charged =====
             if (player.altFunctionUse == 2)
             {
                 if (player.ownedProjectileCounts[ProjectileType<Psybits>()] < 1 && player.whoAmI == Main.myPlayer)
@@ -164,71 +187,163 @@ namespace CStudios.Content.Items.Weapons.Summon
                 return false;
             }
 
-            // ----- Left click: modules -----
+            // ===== LEFT CLICK =====
             var ctx = ZaphielModuleSystem.Resolve(player);
             int dmg = System.Math.Max(1, (int)(damage * ctx.DamageMul));
+            Vector2 aim = velocity.SafeNormalize(Vector2.UnitX);
 
+            // 1) Spearhead melee (Apex Edge)
             if (ctx.MeleeMode)
             {
-                // Placeholder: use short-lived contact proj until you add ZaphielMeleeSwing
-                Vector2 dir = velocity.SafeNormalize(Vector2.UnitX);
-                int idx = Projectile.NewProjectile(source, player.Center + dir * 40f, dir,
+                int idx = Projectile.NewProjectile(source, player.Center + aim * 48f, aim,
                     ProjectileType<PsybitUnchargedLaser>(), dmg, knockback + 3f, player.whoAmI);
                 if (idx >= 0)
                 {
-                    Main.projectile[idx].timeLeft = 12;
+                    Main.projectile[idx].timeLeft = 14;
                     Main.projectile[idx].penetrate = -1;
                     Main.projectile[idx].extraUpdates = 0;
-                    Main.projectile[idx].velocity *= 0.15f;
+                    Main.projectile[idx].velocity *= 0.12f;
+                    Main.projectile[idx].scale = ctx.MeleeSizeMul > 0f ? ctx.MeleeSizeMul : 1f;
                 }
                 SoundEngine.PlaySound(SoundID.Item1, player.Center);
                 return false;
             }
 
-            if (ctx.ContinuousBeam && ctx.OverrideProjectileType == 0)
+            // 2) Spearhead sustained beam (Splinter Beam — ContinuousBeam true from module)
+            if (ctx.ContinuousBeam)
             {
-                if (player.ownedProjectileCounts[ProjectileType<PsybitPlayerBeam>()] < 1)
+                int beamType = ctx.OverrideProjectileType > 0
+                    ? ctx.OverrideProjectileType
+                    : ProjectileType<PsybitPlayerBeam>();
+
+                if (player.ownedProjectileCounts[beamType] < 1)
                 {
-                    int idx = Projectile.NewProjectile(source, player.Center,
-                        velocity.SafeNormalize(Vector2.UnitX),
-                        ProjectileType<PsybitPlayerBeam>(), dmg, knockback, player.whoAmI);
+                    int idx = Projectile.NewProjectile(
+                        source,
+                        player.Center + aim * 50f,
+                        aim,
+                        beamType,
+                        dmg,
+                        knockback,
+                        player.whoAmI);
+
                     if (idx >= 0)
                         Main.projectile[idx].penetrate += ctx.ExtraPierce;
+
+                    // Fallback if override type fails
+                    if ((idx < 0 || idx >= Main.maxProjectiles || !Main.projectile[idx].active)
+                        && beamType != ProjectileType<PsybitPlayerBeam>()
+                        && player.ownedProjectileCounts[ProjectileType<PsybitPlayerBeam>()] < 1)
+                    {
+                        Projectile.NewProjectile(source, player.Center, aim,
+                            ProjectileType<PsybitPlayerBeam>(), dmg, knockback, player.whoAmI);
+                    }
+
+                    SoundEngine.PlaySound(SoundID.Item92, player.Center);
                 }
+
+                SpawnGunVisual(player);
+                return false;
             }
-            else
+
+            // 3) Default: CWR cyber trace volley
+            if (TryShootCWRTraceBeams(player, source, aim, dmg, knockback, ctx))
+            {
+                SpawnGunVisual(player);
+                return false;
+            }
+
+            // 4) Fallback without CWR — simple burst
             {
                 int projType = ctx.OverrideProjectileType > 0
                     ? ctx.OverrideProjectileType
                     : ProjectileType<PsybitUnchargedLaser>();
 
                 int beams = System.Math.Max(1, 1 + ctx.BeamCountAdd);
-                float spread = 0.07f * ctx.SpreadMul;
-                Vector2 baseVel = velocity.SafeNormalize(Vector2.UnitX) * (14f * ctx.BeamSpeedMul);
+                float spread = 0.08f * ctx.SpreadMul;
+                Vector2 baseVel = aim * (14f * ctx.BeamSpeedMul);
 
                 for (int i = 0; i < beams; i++)
                 {
                     float off = beams > 1 ? (i - (beams - 1) / 2f) * spread : 0f;
-                    Vector2 shot = baseVel.RotatedBy(off + Main.rand.NextFloat(-0.02f, 0.02f));
-                    int idx = Projectile.NewProjectile(source, player.Center + shot * 2f, shot,
-                        projType, dmg, knockback, player.whoAmI);
+                    Vector2 shot = baseVel.RotatedBy(off + Main.rand.NextFloat(-0.03f, 0.03f));
+                    int idx = Projectile.NewProjectile(
+                        source,
+                        player.Center + shot.SafeNormalize(aim) * 28f,
+                        shot,
+                        projType,
+                        dmg,
+                        knockback,
+                        player.whoAmI,
+                        ai0: Main.rand.Next(3));
+
                     if (idx >= 0)
                     {
                         Main.projectile[idx].penetrate += ctx.ExtraPierce;
-                        Main.projectile[idx].timeLeft = (int)(Main.projectile[idx].timeLeft * ctx.LifeMul);
+                        Main.projectile[idx].timeLeft = (int)(System.Math.Max(1, Main.projectile[idx].timeLeft * ctx.LifeMul));
                         Main.projectile[idx].ai[1] = ctx.HomingMul;
                     }
                 }
                 SoundEngine.PlaySound(SoundID.Item92, player.Center);
             }
 
-            if (player.ownedProjectileCounts[ProjectileType<PsybitGunUncharged>()] < 1)
+            SpawnGunVisual(player);
+            return false;
+        }
+
+        private static bool TryShootCWRTraceBeams(Player player, IEntitySource source, Vector2 aim,
+            int damage, float knockback, ZaphielShootContext ctx)
+        {
+            if (!ModLoader.TryGetMod("CalamityOverhaul", out Mod cwr))
+                return false;
+
+            if (!cwr.TryFind("CyberTraceBeamProj", out ModProjectile beamMod))
+                return false;
+
+            int beamType = beamMod.Type;
+            SoundEngine.PlaySound(SoundID.Item92, player.Center);
+
+            int beams = System.Math.Max(1, 3 + ctx.BeamCountAdd);
+            float spreadAngle = 0.08f * System.Math.Max(ctx.SpreadMul, 0f);
+            Vector2 baseVel = aim * (14f * ctx.BeamSpeedMul);
+            Vector2 spawnPos = player.Center + new Vector2(aim.X * 20f, -12f);
+
+            for (int i = 0; i < beams; i++)
             {
-                Projectile.NewProjectile(player.GetSource_ItemUse(Item), player.Center, Vector2.Zero,
-                    ProjectileType<PsybitGunUncharged>(), 0, 0, player.whoAmI);
+                float spreadOffset = beams > 1 ? (i - (beams - 1) / 2f) * spreadAngle : 0f;
+                float randomOffset = spreadAngle > 0f ? Main.rand.NextFloat(-0.03f, 0.03f) : 0f;
+                Vector2 shotVel = baseVel.RotatedBy(spreadOffset + randomOffset);
+
+                int idx = Projectile.NewProjectile(
+                    source,
+                    spawnPos + shotVel.SafeNormalize(Vector2.UnitX) * 28f,
+                    shotVel,
+                    beamType,
+                    damage,
+                    knockback,
+                    player.whoAmI,
+                    ai0: Main.rand.Next(3));
+
+                if (idx >= 0 && idx < Main.maxProjectiles)
+                {
+                    Main.projectile[idx].ai[1] = ctx.HomingMul > 0f ? ctx.HomingMul : 1f;
+                    Main.projectile[idx].penetrate += ctx.ExtraPierce;
+                }
             }
 
-            return false;
+            return true;
+        }
+
+        private void SpawnGunVisual(Player player)
+        {
+            if (player.ownedProjectileCounts[ProjectileType<PsybitGunUncharged>()] < 1)
+            {
+                Projectile.NewProjectile(
+                    player.GetSource_ItemUse(Item),
+                    player.Center, Vector2.Zero,
+                    ProjectileType<PsybitGunUncharged>(),
+                    0, 0, player.whoAmI);
+            }
         }
 
         public override void AddRecipes()

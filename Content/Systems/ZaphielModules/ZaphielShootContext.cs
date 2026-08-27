@@ -2,6 +2,7 @@ namespace CStudios.Content.Systems.ZaphielModules
 {
     public struct ZaphielShootContext
     {
+        // Weapon
         public float DamageMul;
         public float AttackSpeedMul;
         public float ManaCostMul;
@@ -17,6 +18,7 @@ namespace CStudios.Content.Systems.ZaphielModules
         public int CritAdd;
         public int OverrideProjectileType;
 
+        // Minions
         public float MinionDamageMul;
         public float MinionFireRangeMul;
         public float MinionMoveSpeedMul;
@@ -24,6 +26,7 @@ namespace CStudios.Content.Systems.ZaphielModules
         public bool MinionUseChargedBeam;
         public bool MinionAggressiveChase;
 
+        // Melee tip mode
         public bool MeleeMode;
         public float MeleeRangeMul;
         public float MeleeSizeMul;
@@ -42,7 +45,7 @@ namespace CStudios.Content.Systems.ZaphielModules
             LifeMul = 1f,
             ExplodeOnHit = false,
             ExplodeRadius = 0f,
-            ContinuousBeam = true,
+            ContinuousBeam = false, // important: default is CWR volley / burst, not sustained beam
             CritAdd = 0,
             OverrideProjectileType = 0,
 

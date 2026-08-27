@@ -44,18 +44,16 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         public override bool PreAI()
         {
             Player player = Main.player[Projectile.owner];
-
-            // Stay only while holding left click with this weapon
             if (!player.active || player.dead
-                || !player.channel
-                || player.HeldItem.type != ModContent.ItemType<Items.Weapons.Summon.ZaphielElectaApex>())
+                || player.HeldItem.type != ModContent.ItemType<Items.Weapons.Summon.ZaphielElectaOmega>()
+                   && player.HeldItem.type != ModContent.ItemType<Items.Weapons.Summon.ZaphielElectaApex>())
             {
                 Projectile.Kill();
                 return false;
             }
 
+            // Stay alive while using / holding the weapon
             Projectile.timeLeft = 2;
-            DrawOriginOffsetY = -6;
             return true;
         }
         //For posterity, the draw code of this gun is going to have each part of the upgraded gun seperate and they will draw in with a white flash.

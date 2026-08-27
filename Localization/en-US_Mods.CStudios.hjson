@@ -33,6 +33,21 @@ Items: {
 		DisplayName: Zaphiel Electa Omega
 		Tooltip: ""
 	}
+
+	ModApexEdge: {
+		DisplayName: Mod Apex Edge
+		Tooltip: ""
+	}
+
+	ModBladeConductorRelay: {
+		DisplayName: Mod Blade Conductor Relay
+		Tooltip: ""
+	}
+
+	ModSplinterBeam: {
+		DisplayName: Mod Splinter Beam
+		Tooltip: ""
+	}
 }
 
 Buffs: {
