@@ -2,7 +2,6 @@ namespace CStudios.Content.Systems.ZaphielModules
 {
     public struct ZaphielShootContext
     {
-        // Weapon
         public float DamageMul;
         public float AttackSpeedMul;
         public float ManaCostMul;
@@ -17,16 +16,20 @@ namespace CStudios.Content.Systems.ZaphielModules
         public bool ContinuousBeam;
         public int CritAdd;
         public int OverrideProjectileType;
+        public float LifestealFraction;
 
-        // Minions
+        /// <summary>When true (Splinter Beam module): fire SHPC-style trace volleys.</summary>
+        public bool TraceVolleyMode;
+
         public float MinionDamageMul;
         public float MinionFireRangeMul;
         public float MinionMoveSpeedMul;
         public float MinionOrbitRadiusMul;
         public bool MinionUseChargedBeam;
         public bool MinionAggressiveChase;
+        public bool MinionRandomOrbit;
+        public bool MinionVolleyShot;
 
-        // Melee tip mode
         public bool MeleeMode;
         public float MeleeRangeMul;
         public float MeleeSizeMul;
@@ -45,9 +48,11 @@ namespace CStudios.Content.Systems.ZaphielModules
             LifeMul = 1f,
             ExplodeOnHit = false,
             ExplodeRadius = 0f,
-            ContinuousBeam = false, // important: default is CWR volley / burst, not sustained beam
+            ContinuousBeam = false,
             CritAdd = 0,
             OverrideProjectileType = 0,
+            TraceVolleyMode = false,
+            LifestealFraction = 0f,
 
             MinionDamageMul = 1f,
             MinionFireRangeMul = 1f,
@@ -55,6 +60,8 @@ namespace CStudios.Content.Systems.ZaphielModules
             MinionOrbitRadiusMul = 1f,
             MinionUseChargedBeam = false,
             MinionAggressiveChase = false,
+            MinionRandomOrbit = false,
+            MinionVolleyShot = false,
 
             MeleeMode = false,
             MeleeRangeMul = 1f,
