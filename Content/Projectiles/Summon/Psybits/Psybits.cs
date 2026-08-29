@@ -10,6 +10,7 @@ using CStudios.Content.Buffs;
 using CStudios.Content.DamageClasses;
 using CStudios.Content.Systems.ZaphielModules;
 using CStudios.Content.Utilities;
+using CStudios.Content.Systems.ZaphielModules.Authority;
 
 namespace CStudios.Content.Projectiles.Summon.Psybits
 {
@@ -136,11 +137,26 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         public override void AI()
         {
             Player owner = Main.player[Projectile.owner];
-            ProjectileID.Sets.TrailCacheLength[Projectile.type] = 40;
             if (!CheckActive(owner))
                 return;
 
+            ZaphielShootContext ctx = ZaphielModuleSystem.Resolve(owner);
+
+            // Slot cost (Throne of Bits / future TwinLink)
+            Projectile.minionSlots = ctx.MinionSlotsPerBit > 0f ? ctx.MinionSlotsPerBit : 1f;
+
+            // Authority patterns override normal AI
+            if (CStudios.Content.Systems.ZaphielModules.Authority.AuthorityPatternAI
+                    .TryRunPatternAI(Projectile, owner, ctx))
+            {
+                Visuals();
+                return;
+            }
+
             Projectile.frame = (int)PsybitID;
+
+            ProjectileID.Sets.TrailCacheLength[Projectile.type] = 40;
+
             ZaphielShootContext ctx = ZaphielModuleSystem.Resolve(owner);
 
             if (owner.HasBuff(BuffType<PsybitOvercharge>()))
