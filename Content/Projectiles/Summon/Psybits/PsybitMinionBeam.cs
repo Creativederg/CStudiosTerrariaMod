@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 using CStudios.Content.DamageClasses;
 using CStudios.Content.Buffs;
 using CStudios.Content.NPCs;
+using CStudios.Content.Items.Weapons.Summon;
 using System;
 using Terraria;
 using Terraria.GameContent;

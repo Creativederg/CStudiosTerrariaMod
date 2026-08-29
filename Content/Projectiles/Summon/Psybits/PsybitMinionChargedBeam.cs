@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 using CStudios.Content.Buffs;
 using CStudios.Content.DamageClasses;
 using CStudios.Content.NPCs;
+using CStudios.Content.Items.Weapons.Summon;
 using System;
 using Terraria;
 using Terraria.GameContent;
@@ -110,10 +111,20 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         {
             target.immune[Projectile.owner] = 6; // hits more often than normal minion beam
 
-            var global = target.GetGlobalNPC<CStudiosGlobalNPC>();
-            if (!target.HasBuff(BuffType<EntropicCorruption>()))
-                global.EntropicStacks = 1;
-            target.AddBuff(BuffType<EntropicCorruption>(), 5 * 60);
+            int held = Main.player[Projectile.owner].HeldItem.type;
+            bool applyEntropic =
+                held == ItemType<ZaphielElectaResonator>()
+                || held == ItemType<ZaphielElectaSurge>()
+                || held == ItemType<ZaphielElectaApex>()
+                || held == ItemType<ZaphielElectaOmega>();
+
+            if (applyEntropic)
+            {
+                var global = target.GetGlobalNPC<CStudiosGlobalNPC>();
+                if (!target.HasBuff(BuffType<EntropicCorruption>()))
+                    global.EntropicStacks = 1;
+                target.AddBuff(BuffType<EntropicCorruption>(), 5 * 60);
+            }
         }
 
         public override void AI()

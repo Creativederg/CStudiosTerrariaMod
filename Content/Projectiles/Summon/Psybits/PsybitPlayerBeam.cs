@@ -1,4 +1,4 @@
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using CStudios.Content.Buffs;
 using CStudios.Content.DamageClasses;
@@ -142,61 +142,58 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         {
             Player player = Main.player[Projectile.owner];
 
-            int apex = ItemType<ZaphielElectaApex>();
-            int omega = ItemType<ZaphielElectaOmega>();
-            int held = player.HeldItem.type;
             bool validWeapon =
-                held == ItemType<ZaphielElectaSpark>()
-                || held == ItemType<ZaphielElectaCoil>()
-                || held == ItemType<ZaphielElectaResonator>()
-                || held == ItemType<ZaphielElectaSurge>()
-                || held == ItemType<ZaphielElectaApex>()
-                || held == ItemType<ZaphielElectaOmega>();
+                player.HeldItem.type == ItemType<ZaphielElectaSpark>()
+                || player.HeldItem.type == ItemType<ZaphielElectaCoil>()
+                || player.HeldItem.type == ItemType<ZaphielElectaResonator>()
+                || player.HeldItem.type == ItemType<ZaphielElectaSurge>()
+                || player.HeldItem.type == ItemType<ZaphielElectaApex>()
+                || player.HeldItem.type == ItemType<ZaphielElectaOmega>();
 
-            if (!player.active || player.dead || !player.channel || !validWeapon)
+            if (!player.active || player.dead || !validWeapon)
             {
                 Projectile.Kill();
                 return;
             }
 
-            // mana drain while held (same as before)
-            int manaPerTick = player.HeldItem.mana > 0 ? player.HeldItem.mana : 4;
-            if (Projectile.owner == Main.myPlayer && Main.GameUpdateCount % 6 == 0)
+            // Grace: channel can lag 1–2 frames when you press the button
+            if (!player.channel)
             {
-                if (!player.CheckMana(player.HeldItem, manaPerTick, pay: true))
+                Projectile.localAI[1] += 1f;
+                if (Projectile.localAI[1] > 8f) // ~8 frames without channel → stop
                 {
-                    player.channel = false;
                     Projectile.Kill();
                     return;
                 }
             }
-
-            if (!player.active || player.dead
-                || !player.channel
-                || (held != apex && held != omega))
+            else
             {
-                Projectile.Kill();
-                return;
+                Projectile.localAI[1] = 0f;
             }
 
-            // --- Mana drain while held ---
-            // Use the held item's mana cost; fall back to 6
-            int manaPerTick = player.HeldItem.mana > 0 ? player.HeldItem.mana : 6;
-
-            // Drain once every 6 frames (~10 times/sec) so it isn't instant empty
-            if (Projectile.owner == Main.myPlayer && Projectile.timeLeft % 6 == 0)
+            // Mana while held (skip the first ~12 frames so the beam can appear)
+            Projectile.localAI[2] += 1f;
+            if (Projectile.owner == Main.myPlayer && Projectile.localAI[2] > 12f)
             {
-                if (!player.CheckMana(player.HeldItem, manaPerTick, pay: true))
+                int manaCost = player.HeldItem.mana > 0 ? player.HeldItem.mana : 4;
+                // Drain every 8 frames
+                if ((int)Projectile.localAI[2] % 8 == 0)
                 {
-                    // Out of mana: stop channel and kill beam
-                    player.channel = false;
-                    Projectile.Kill();
-                    return;
+                    if (!player.CheckMana(player.HeldItem, manaCost, pay: true))
+                    {
+                        player.channel = false;
+                        Projectile.Kill();
+                        return;
+                    }
                 }
             }
 
             Projectile.timeLeft = 2;
             Charge = MAX_CHARGE;
+
+            // Ensure a facing direction if velocity was zero
+            if (Projectile.velocity.LengthSquared() < 0.001f)
+                Projectile.velocity = (Main.MouseWorld - player.MountedCenter).SafeNormalize(Vector2.UnitX);
 
             UpdatePlayer(player);
             SetLaserPosition(player);
@@ -227,7 +224,7 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
 
         private void SetLaserPosition(Player player)
         {
-            // Always full range � passes through all tiles
+            // Always full range — passes through all tiles
             Distance = MAX_RANGE;
         }
 
