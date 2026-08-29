@@ -2,6 +2,7 @@ using Microsoft.Xna.Framework;
 using CStudios.Content.Buffs;
 using CStudios.Content.DamageClasses;
 using CStudios.Content.Projectiles.Summon.Psybits;
+using CStudios.Content.Systems.ZaphielModules;
 using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
@@ -42,10 +43,22 @@ namespace CStudios.Content.Items.Weapons.Summon
             Item.buffType = BuffType<PsybitDefensiveArray>();
         }
 
+        private int GetEffectiveMaxBits(Player player)
+        {
+            var ctx = ZaphielModuleSystem.Resolve(player);
+            // Use the weapon's own MaxBits const, or 11 for Apex/Omega
+            int baseMax = MaxBits; // or 11
+            int effective = (int)(baseMax * ctx.MaxBitsMul) + ctx.AuthorityBonusBits;
+            return System.Math.Max(1, effective);
+        }
+
         public override bool AltFunctionUse(Player player) => true;
 
         public override bool CanUseItem(Player player)
         {
+            if (player.altFunctionUse == 2)
+                return player.ownedProjectileCounts[ProjectileType<Psybits>()] < GetEffectiveMaxBits(player);
+
             if (player.altFunctionUse == 2)
                 return player.ownedProjectileCounts[ProjectileType<Psybits>()] < MaxBits;
             return true;
@@ -56,13 +69,15 @@ namespace CStudios.Content.Items.Weapons.Summon
         {
             if (player.altFunctionUse == 2)
             {
-                int have = player.ownedProjectileCounts[ProjectileType<Psybits>()];
-                int toSpawn = MaxBits - have;
-                for (int i = 0; i < toSpawn; i++)
+                int effectiveMax = GetEffectiveMaxBits(player);
+                for (int i = 0; i < effectiveMax; i++)
                 {
-                    Projectile.NewProjectile(player.GetSource_ItemUse(Item), player.Center, Vector2.Zero,
-                        ProjectileType<Psybits>(), player.GetWeaponDamage(Item), 0f, player.whoAmI,
-                        0f, Main.rand.Next(0, 360), have + i);
+                    Projectile.NewProjectile(
+                        player.GetSource_ItemUse(Item),
+                        player.Center, Vector2.Zero,
+                        ProjectileType<Psybits>(),
+                        player.GetWeaponDamage(Item), 0f, player.whoAmI,
+                        0f, Main.rand.Next(0, 360), i);
                 }
                 player.AddBuff(Item.buffType, 2);
                 SoundEngine.PlaySound(SoundID.Item46, player.Center);

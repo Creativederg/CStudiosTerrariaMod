@@ -3,6 +3,7 @@ using CStudios.Content.Buffs;
 using CStudios.Content.DamageClasses;
 using CStudios.Content.Projectiles.Summon.Psybits;
 using CStudios.Content.Systems.ZaphielModules;
+using CStudios.Content.Systems.ZaphielModules.Authority;
 using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
@@ -15,6 +16,8 @@ namespace CStudios.Content.Items.Weapons.Summon
 {
     public class ZaphielElectaOmega : ModItem
     {
+        public const int MaxBits = 11;
+
         public override void SetStaticDefaults()
         {
             ItemID.Sets.ItemsThatAllowRepeatedRightClick[Type] = true;
@@ -40,6 +43,15 @@ namespace CStudios.Content.Items.Weapons.Summon
             Item.mana = 6;
             Item.knockBack = 5f;
             Item.buffType = BuffType<PsybitDefensiveArray>();
+        }
+
+        private int GetEffectiveMaxBits(Player player)
+        {
+            var ctx = ZaphielModuleSystem.Resolve(player);
+            // Use the weapon's own MaxBits const, or 11 for Apex/Omega
+            int baseMax = MaxBits; // or 11
+            int effective = (int)(baseMax * ctx.MaxBitsMul) + ctx.AuthorityBonusBits;
+            return System.Math.Max(1, effective);
         }
 
         public override void ModifyWeaponDamage(Player player, ref StatModifier damage)
@@ -93,6 +105,9 @@ namespace CStudios.Content.Items.Weapons.Summon
         public override bool CanUseItem(Player player)
         {
             if (player.altFunctionUse == 2)
+                return player.ownedProjectileCounts[ProjectileType<Psybits>()] < GetEffectiveMaxBits(player);
+
+            if (player.altFunctionUse == 2)
             {
                 if (player.ownedProjectileCounts[ProjectileType<Psybits>()] < 1)
                     return true;
@@ -129,6 +144,13 @@ namespace CStudios.Content.Items.Weapons.Summon
             if (player.whoAmI != Main.myPlayer)
                 return;
 
+            if (ctx.AuthorityCoreActive)
+            {
+                if (CStudios.UltimateKey != null && CStudios.UltimateKey.JustPressed)
+                    CStudios.Content.Systems.ZaphielModules.Authority.AuthorityPatternSystem.TryActivatePattern(player);
+                return;
+            }
+
             if (CStudios.UltimateKey != null
                 && CStudios.UltimateKey.JustPressed
                 && !player.HasBuff(BuffType<PsybitOvercharge>())
@@ -149,7 +171,8 @@ namespace CStudios.Content.Items.Weapons.Summon
             {
                 if (player.ownedProjectileCounts[ProjectileType<Psybits>()] < 1 && player.whoAmI == Main.myPlayer)
                 {
-                    for (int i = 0; i < 11; i++)
+                    int effectiveMax = GetEffectiveMaxBits(player);
+                    for (int i = 0; i < effectiveMax; i++)
                     {
                         Projectile.NewProjectile(
                             player.GetSource_ItemUse(Item),

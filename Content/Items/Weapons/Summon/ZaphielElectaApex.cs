@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using CStudios.Content.Buffs;
 using CStudios.Content.Projectiles.Summon.Psybits;
+using CStudios.Content.Systems.ZaphielModules;
 using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
@@ -13,6 +14,8 @@ namespace CStudios.Content.Items.Weapons.Summon
 {
     public class ZaphielElectaApex : ModItem
     {
+        public const int MaxBits = 11;
+
         public override void SetStaticDefaults()
         {
             Terraria.GameContent.Creative.CreativeItemSacrificesCatalog.Instance.SacrificeCountNeededByItemId[Type] = 1;
@@ -40,6 +43,15 @@ namespace CStudios.Content.Items.Weapons.Summon
             Item.buffType = BuffType<PsybitDefensiveArray>();
         }
 
+        private int GetEffectiveMaxBits(Player player)
+        {
+            var ctx = ZaphielModuleSystem.Resolve(player);
+            // Use the weapon's own MaxBits const, or 11 for Apex/Omega
+            int baseMax = MaxBits; // or 11
+            int effective = (int)(baseMax * ctx.MaxBitsMul) + ctx.AuthorityBonusBits;
+            return System.Math.Max(1, effective);
+        }
+
         public override bool AltFunctionUse(Player player)
         {
             return true;
@@ -55,6 +67,9 @@ namespace CStudios.Content.Items.Weapons.Summon
         {
             if (player.altFunctionUse == 2)
             {
+                if (player.altFunctionUse == 2)
+                    return player.ownedProjectileCounts[ProjectileType<Psybits>()] < GetEffectiveMaxBits(player);
+
                 // Always allow the first summon. For the charged shot, respect the original cooldowns.
                 if (player.ownedProjectileCounts[ProjectileType<Psybits>()] < 1)
                     return true;
@@ -98,19 +113,15 @@ namespace CStudios.Content.Items.Weapons.Summon
                 // First right-click: summon all minions
                 if (player.ownedProjectileCounts[ProjectileType<Psybits>()] < 1 && player.whoAmI == Main.myPlayer)
                 {
-                    for (int i = 0; i < 11; i++)
+                    int effectiveMax = GetEffectiveMaxBits(player);
+                    for (int i = 0; i < effectiveMax; i++)
                     {
                         Projectile.NewProjectile(
-                            player.GetSource_ItemUse(player.HeldItem),
-                            player.Center.X, player.Center.Y,
-                            0f, 0f,
+                            player.GetSource_ItemUse(Item),
+                            player.Center, Vector2.Zero,
                             ProjectileType<Psybits>(),
-                            player.GetWeaponDamage(Item),
-                            0f,
-                            player.whoAmI,
-                            0f,
-                            Main.rand.Next(0, 360),
-                            i);
+                            player.GetWeaponDamage(Item), 0f, player.whoAmI,
+                            0f, Main.rand.Next(0, 360), i);
                     }
 
                     // Long-duration buff so they persist after switching weapons

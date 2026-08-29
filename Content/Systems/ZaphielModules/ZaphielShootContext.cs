@@ -2,6 +2,7 @@ namespace CStudios.Content.Systems.ZaphielModules
 {
     public struct ZaphielShootContext
     {
+        // Weapon
         public float DamageMul;
         public float AttackSpeedMul;
         public float ManaCostMul;
@@ -14,26 +15,42 @@ namespace CStudios.Content.Systems.ZaphielModules
         public bool ExplodeOnHit;
         public float ExplodeRadius;
         public bool ContinuousBeam;
+        public bool TraceVolleyMode;
         public int CritAdd;
         public int OverrideProjectileType;
         public float LifestealFraction;
 
-        /// <summary>When true (Splinter Beam module): fire SHPC-style trace volleys.</summary>
-        public bool TraceVolleyMode;
-
+        // Minions
         public float MinionDamageMul;
         public float MinionFireRangeMul;
         public float MinionMoveSpeedMul;
         public float MinionOrbitRadiusMul;
         public bool MinionUseChargedBeam;
         public bool MinionAggressiveChase;
-        public bool MinionRandomOrbit;
         public bool MinionVolleyShot;
+        public bool MinionRandomOrbit;
 
+        // Melee
         public bool MeleeMode;
         public float MeleeRangeMul;
         public float MeleeSizeMul;
         public int MeleeStrikeInterval;
+
+        // Shared new
+        public float MaxBitsMul;
+        public float MinionSlotsPerBit;
+
+        // Authority of the Bits
+        public bool AuthorityMode;
+        public bool CommandLanceActive;
+        public bool AbsoluteVectorActive;
+        public bool AuthorityCoreActive;
+        public bool CascadeLinkActive;
+        public bool ThroneOfBitsActive;
+        public float AuthorityPatternPowerMul;
+        public float AuthorityPatternCostMul;
+        public int AuthorityBonusBits;
+        public float AuthorityFormationIntegrity;
 
         public static ZaphielShootContext Default => new()
         {
@@ -49,9 +66,9 @@ namespace CStudios.Content.Systems.ZaphielModules
             ExplodeOnHit = false,
             ExplodeRadius = 0f,
             ContinuousBeam = false,
+            TraceVolleyMode = false,
             CritAdd = 0,
             OverrideProjectileType = 0,
-            TraceVolleyMode = false,
             LifestealFraction = 0f,
 
             MinionDamageMul = 1f,
@@ -60,13 +77,27 @@ namespace CStudios.Content.Systems.ZaphielModules
             MinionOrbitRadiusMul = 1f,
             MinionUseChargedBeam = false,
             MinionAggressiveChase = false,
-            MinionRandomOrbit = false,
             MinionVolleyShot = false,
+            MinionRandomOrbit = false,
 
             MeleeMode = false,
             MeleeRangeMul = 1f,
             MeleeSizeMul = 1f,
             MeleeStrikeInterval = 20,
+
+            MaxBitsMul = 1f,
+            MinionSlotsPerBit = 1f,
+
+            AuthorityMode = false,
+            CommandLanceActive = false,
+            AbsoluteVectorActive = false,
+            AuthorityCoreActive = false,
+            CascadeLinkActive = false,
+            ThroneOfBitsActive = false,
+            AuthorityPatternPowerMul = 1f,
+            AuthorityPatternCostMul = 1f,
+            AuthorityBonusBits = 0,
+            AuthorityFormationIntegrity = 1f,
         };
     }
 }

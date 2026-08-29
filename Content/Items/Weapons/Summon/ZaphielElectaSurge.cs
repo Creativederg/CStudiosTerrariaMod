@@ -2,6 +2,7 @@ using Microsoft.Xna.Framework;
 using CStudios.Content.Buffs;
 using CStudios.Content.DamageClasses;
 using CStudios.Content.Projectiles.Summon.Psybits;
+using CStudios.Content.Systems.ZaphielModules;
 using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
@@ -40,6 +41,25 @@ namespace CStudios.Content.Items.Weapons.Summon
             Item.mana = 6;
             Item.knockBack = 3.5f;
             Item.buffType = BuffType<PsybitDefensiveArray>();
+        }
+
+        private int GetEffectiveMaxBits(Player player)
+        {
+            var ctx = ZaphielModuleSystem.Resolve(player);
+            // Use the weapon's own MaxBits const, or 11 for Apex/Omega
+            int baseMax = MaxBits; // or 11
+            int effective = (int)(baseMax * ctx.MaxBitsMul) + ctx.AuthorityBonusBits;
+            return System.Math.Max(1, effective);
+        }
+
+        public override bool CanUseItem(Player player)
+        {
+            if (player.altFunctionUse == 2)
+                return player.ownedProjectileCounts[ProjectileType<Psybits>()] < GetEffectiveMaxBits(player);
+
+            if (player.altFunctionUse == 2)
+                return player.ownedProjectileCounts[ProjectileType<Psybits>()] < MaxBits;
+            return true;
         }
 
         public override void HoldItem(Player player)
