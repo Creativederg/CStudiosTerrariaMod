@@ -72,8 +72,20 @@ namespace CStudios.Content.Items.Weapons.Summon
             // Channel beam
             if (player.ownedProjectileCounts[ProjectileType<PsybitPlayerBeam>()] < 1)
             {
-                Projectile.NewProjectile(source, player.Center, velocity.SafeNormalize(Vector2.UnitX),
-                    ProjectileType<PsybitPlayerBeam>(), damage, knockback, player.whoAmI);
+                Vector2 aim = velocity;
+                if (aim.LengthSquared() < 0.001f)
+                    aim = (Main.MouseWorld - player.MountedCenter).SafeNormalize(Vector2.UnitX);
+                else
+                    aim = aim.SafeNormalize(Vector2.UnitX);
+
+                Projectile.NewProjectile(
+                    source,
+                    player.Center,
+                    aim,
+                    ProjectileType<PsybitPlayerBeam>(),
+                    damage,
+                    knockback,
+                    player.whoAmI);
             }
             return false;
         }
