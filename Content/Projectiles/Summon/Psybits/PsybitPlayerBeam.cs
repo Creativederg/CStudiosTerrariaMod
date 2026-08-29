@@ -111,14 +111,24 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
         {
             target.immune[Projectile.owner] = 6;
-            target.AddBuff(BuffType<PsybitMarked>(), 180);
 
             // Entropic Corruption
-            var global = target.GetGlobalNPC<CStudiosGlobalNPC>();
-            if (!target.HasBuff(BuffType<EntropicCorruption>()))
-                global.EntropicStacks = 1; // first stack
+            int held = Main.player[Projectile.owner].HeldItem.type;
+            bool applyEntropic =
+                held == ItemType<ZaphielElectaResonator>()
+                || held == ItemType<ZaphielElectaSurge>()
+                || held == ItemType<ZaphielElectaApex>()
+                || held == ItemType<ZaphielElectaOmega>();
 
-            target.AddBuff(BuffType<EntropicCorruption>(), 5 * 60); // 5 seconds; refresh + stack on reapply
+            if (applyEntropic)
+            {
+                var global = target.GetGlobalNPC<CStudiosGlobalNPC>();
+                if (!target.HasBuff(BuffType<EntropicCorruption>()))
+                    global.EntropicStacks = 1;
+                target.AddBuff(BuffType<EntropicCorruption>(), 5 * 60);
+            }
+
+            target.AddBuff(BuffType<PsybitMarked>(), 180);
 
             for (int i = 0; i < 6; i++)
             {
@@ -132,13 +142,57 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         {
             Player player = Main.player[Projectile.owner];
 
-            // Stop when not channeling / wrong item / dead
-            if (!player.active || player.dead
-                || !player.channel
-                || player.HeldItem.type != ItemType<ZaphielElectaApex>())
+            int apex = ItemType<ZaphielElectaApex>();
+            int omega = ItemType<ZaphielElectaOmega>();
+            int held = player.HeldItem.type;
+            bool validWeapon =
+                held == ItemType<ZaphielElectaSpark>()
+                || held == ItemType<ZaphielElectaCoil>()
+                || held == ItemType<ZaphielElectaResonator>()
+                || held == ItemType<ZaphielElectaSurge>()
+                || held == ItemType<ZaphielElectaApex>()
+                || held == ItemType<ZaphielElectaOmega>();
+
+            if (!player.active || player.dead || !player.channel || !validWeapon)
             {
                 Projectile.Kill();
                 return;
+            }
+
+            // mana drain while held (same as before)
+            int manaPerTick = player.HeldItem.mana > 0 ? player.HeldItem.mana : 4;
+            if (Projectile.owner == Main.myPlayer && Main.GameUpdateCount % 6 == 0)
+            {
+                if (!player.CheckMana(player.HeldItem, manaPerTick, pay: true))
+                {
+                    player.channel = false;
+                    Projectile.Kill();
+                    return;
+                }
+            }
+
+            if (!player.active || player.dead
+                || !player.channel
+                || (held != apex && held != omega))
+            {
+                Projectile.Kill();
+                return;
+            }
+
+            // --- Mana drain while held ---
+            // Use the held item's mana cost; fall back to 6
+            int manaPerTick = player.HeldItem.mana > 0 ? player.HeldItem.mana : 6;
+
+            // Drain once every 6 frames (~10 times/sec) so it isn't instant empty
+            if (Projectile.owner == Main.myPlayer && Projectile.timeLeft % 6 == 0)
+            {
+                if (!player.CheckMana(player.HeldItem, manaPerTick, pay: true))
+                {
+                    // Out of mana: stop channel and kill beam
+                    player.channel = false;
+                    Projectile.Kill();
+                    return;
+                }
             }
 
             Projectile.timeLeft = 2;

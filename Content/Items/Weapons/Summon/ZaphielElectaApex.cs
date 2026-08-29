@@ -45,6 +45,12 @@ namespace CStudios.Content.Items.Weapons.Summon
             return true;
         }
 
+        public override void ModifyManaCost(Player player, ref float reduce, ref float mult)
+        {
+            if (player.channel)
+                mult = 0f;
+        }
+
         public override bool CanUseItem(Player player)
         {
             if (player.altFunctionUse == 2)
@@ -179,11 +185,12 @@ namespace CStudios.Content.Items.Weapons.Summon
         public override void AddRecipes()
         {
             CreateRecipe(1)
+                .AddIngredient<ZaphielElectaSurge>()
                 .AddIngredient(ItemID.Nanites, 50)
                 .AddIngredient(ItemID.FragmentNebula, 10)
+                .AddIngredient(ItemID.FragmentStardust, 10)
                 .AddIngredient(ItemID.MartianConduitPlating, 20)
-                //.AddIngredient(ItemType<EssenceOfFirepower>())
-                .AddTile(TileID.Anvils)
+                .AddTile(TileID.MythrilAnvil)
                 .Register();
         }
     }

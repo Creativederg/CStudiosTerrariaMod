@@ -112,11 +112,20 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             // Higher immunity so 11 beams don't melt everything instantly
             target.immune[Projectile.owner] = 10;
 
-            var global = target.GetGlobalNPC<CStudiosGlobalNPC>();
-            if (!target.HasBuff(BuffType<EntropicCorruption>()))
-                global.EntropicStacks = 1;
+            int held = Main.player[Projectile.owner].HeldItem.type;
+            bool applyEntropic =
+                held == ItemType<ZaphielElectaResonator>()
+                || held == ItemType<ZaphielElectaSurge>()
+                || held == ItemType<ZaphielElectaApex>()
+                || held == ItemType<ZaphielElectaOmega>();
 
-            target.AddBuff(BuffType<EntropicCorruption>(), 5 * 60);
+            if (applyEntropic)
+            {
+                var global = target.GetGlobalNPC<CStudiosGlobalNPC>();
+                if (!target.HasBuff(BuffType<EntropicCorruption>()))
+                    global.EntropicStacks = 1;
+                target.AddBuff(BuffType<EntropicCorruption>(), 5 * 60);
+            }
         }
 
         public override void AI()

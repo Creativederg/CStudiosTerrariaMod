@@ -1,4 +1,4 @@
-using Microsoft.Xna.Framework;
+ï»¿using Microsoft.Xna.Framework;
 using CStudios.Content.Buffs;
 using CStudios.Content.DamageClasses;
 using CStudios.Content.Projectiles.Summon.Psybits;
@@ -34,7 +34,7 @@ namespace CStudios.Content.Items.Weapons.Summon
             Item.autoReuse = true;
             Item.noUseGraphic = true;
             Item.noMelee = true;
-            Item.channel = false;
+            Item.channel = true; // default single beam channels
             Item.shoot = ProjectileID.WoodenArrowFriendly;
             Item.shootSpeed = 18f;
             Item.mana = 6;
@@ -56,7 +56,12 @@ namespace CStudios.Content.Items.Weapons.Summon
 
         public override void ModifyManaCost(Player player, ref float reduce, ref float mult)
         {
-            mult *= ZaphielModuleSystem.Resolve(player).ManaCostMul;
+            var ctx = ZaphielModuleSystem.Resolve(player); // Omega only
+            mult *= ctx.ManaCostMul;
+
+            // Continuous beam: beam AI pays mana; avoid full cost every useTime
+            if (player.channel && !ctx.MeleeMode && !ctx.TraceVolleyMode)
+                mult = 0f;
         }
 
         public override float UseSpeedMultiplier(Player player)
@@ -77,19 +82,10 @@ namespace CStudios.Content.Items.Weapons.Summon
             });
 
             tooltips.Add(new TooltipLine(Mod, "OmegaModules",
-                "Press K — Lance Matrix. Spearhead: Apex Edge (melee) or Splinter Beam (beam).")
+                "Default: single beam. Splinter Beam module: SHPC-style volleys. Apex Edge: melee.")
             {
                 OverrideColor = new Color(255, 120, 160)
             });
-
-            if (ModLoader.HasMod("CalamityOverhaul"))
-            {
-                tooltips.Add(new TooltipLine(Mod, "OmegaCWR",
-                    "Default left click: CWR cyber trace volleys")
-                {
-                    OverrideColor = new Color(100, 200, 255)
-                });
-            }
         }
 
         public override bool AltFunctionUse(Player player) => true;
@@ -109,20 +105,25 @@ namespace CStudios.Content.Items.Weapons.Summon
         {
             var ctx = ZaphielModuleSystem.Resolve(player);
 
-            // Only channel when a module enables sustained beam
-            bool spearheadBeam = ctx.ContinuousBeam && !ctx.MeleeMode;
-
             if (ctx.MeleeMode)
             {
                 Item.noUseGraphic = false;
                 Item.channel = false;
                 Item.useStyle = ItemUseStyleID.Swing;
             }
+            else if (ctx.TraceVolleyMode)
+            {
+                // Splinter Beam: click volleys, no channel
+                Item.noUseGraphic = true;
+                Item.channel = false;
+                Item.useStyle = ItemUseStyleID.Shoot;
+            }
             else
             {
+                // Default: hold for single continuous beam
                 Item.noUseGraphic = true;
+                Item.channel = true;
                 Item.useStyle = ItemUseStyleID.Shoot;
-                Item.channel = spearheadBeam;
             }
 
             if (player.whoAmI != Main.myPlayer)
@@ -143,7 +144,7 @@ namespace CStudios.Content.Items.Weapons.Summon
         public override bool Shoot(Player player, EntitySource_ItemUse_WithAmmo source,
             Vector2 position, Vector2 velocity, int type, int damage, float knockback)
         {
-            // ===== RIGHT CLICK: summon / charged =====
+            // ===== RIGHT CLICK =====
             if (player.altFunctionUse == 2)
             {
                 if (player.ownedProjectileCounts[ProjectileType<Psybits>()] < 1 && player.whoAmI == Main.myPlayer)
@@ -192,7 +193,7 @@ namespace CStudios.Content.Items.Weapons.Summon
             int dmg = System.Math.Max(1, (int)(damage * ctx.DamageMul));
             Vector2 aim = velocity.SafeNormalize(Vector2.UnitX);
 
-            // 1) Spearhead melee (Apex Edge)
+            // 1) Melee (Apex Edge)
             if (ctx.MeleeMode)
             {
                 int idx = Projectile.NewProjectile(source, player.Center + aim * 48f, aim,
@@ -209,36 +210,23 @@ namespace CStudios.Content.Items.Weapons.Summon
                 return false;
             }
 
-            // 2) Spearhead sustained beam (Splinter Beam — ContinuousBeam true from module)
-            if (ctx.ContinuousBeam)
+            // 2) Splinter Beam â†’ SHPC-style cyber trace volleys
+            if (ctx.TraceVolleyMode)
             {
-                int beamType = ctx.OverrideProjectileType > 0
-                    ? ctx.OverrideProjectileType
-                    : ProjectileType<PsybitPlayerBeam>();
-
-                if (player.ownedProjectileCounts[beamType] < 1)
+                if (!TryShootCWRTraceBeams(player, source, aim, dmg, knockback, ctx))
                 {
-                    int idx = Projectile.NewProjectile(
-                        source,
-                        player.Center + aim * 50f,
-                        aim,
-                        beamType,
-                        dmg,
-                        knockback,
-                        player.whoAmI);
+                    // Fallback without CWR
+                    int beams = System.Math.Max(1, 3 + ctx.BeamCountAdd);
+                    float spread = 0.08f * ctx.SpreadMul;
+                    Vector2 baseVel = aim * (14f * ctx.BeamSpeedMul);
 
-                    if (idx >= 0)
-                        Main.projectile[idx].penetrate += ctx.ExtraPierce;
-
-                    // Fallback if override type fails
-                    if ((idx < 0 || idx >= Main.maxProjectiles || !Main.projectile[idx].active)
-                        && beamType != ProjectileType<PsybitPlayerBeam>()
-                        && player.ownedProjectileCounts[ProjectileType<PsybitPlayerBeam>()] < 1)
+                    for (int i = 0; i < beams; i++)
                     {
-                        Projectile.NewProjectile(source, player.Center, aim,
-                            ProjectileType<PsybitPlayerBeam>(), dmg, knockback, player.whoAmI);
+                        float off = beams > 1 ? (i - (beams - 1) / 2f) * spread : 0f;
+                        Vector2 shot = baseVel.RotatedBy(off + Main.rand.NextFloat(-0.03f, 0.03f));
+                        Projectile.NewProjectile(source, player.Center + shot.SafeNormalize(aim) * 28f, shot,
+                            ProjectileType<PsybitUnchargedLaser>(), dmg, knockback, player.whoAmI);
                     }
-
                     SoundEngine.PlaySound(SoundID.Item92, player.Center);
                 }
 
@@ -246,49 +234,17 @@ namespace CStudios.Content.Items.Weapons.Summon
                 return false;
             }
 
-            // 3) Default: CWR cyber trace volley
-            if (TryShootCWRTraceBeams(player, source, aim, dmg, knockback, ctx))
+            // 3) Default â†’ single continuous beam
             {
+                int beamType = ProjectileType<PsybitPlayerBeam>();
+                if (player.ownedProjectileCounts[beamType] < 1)
+                {
+                    Projectile.NewProjectile(source, player.Center, aim, beamType, dmg, knockback, player.whoAmI);
+                    SoundEngine.PlaySound(SoundID.Item15, player.Center);
+                }
                 SpawnGunVisual(player);
                 return false;
             }
-
-            // 4) Fallback without CWR — simple burst
-            {
-                int projType = ctx.OverrideProjectileType > 0
-                    ? ctx.OverrideProjectileType
-                    : ProjectileType<PsybitUnchargedLaser>();
-
-                int beams = System.Math.Max(1, 1 + ctx.BeamCountAdd);
-                float spread = 0.08f * ctx.SpreadMul;
-                Vector2 baseVel = aim * (14f * ctx.BeamSpeedMul);
-
-                for (int i = 0; i < beams; i++)
-                {
-                    float off = beams > 1 ? (i - (beams - 1) / 2f) * spread : 0f;
-                    Vector2 shot = baseVel.RotatedBy(off + Main.rand.NextFloat(-0.03f, 0.03f));
-                    int idx = Projectile.NewProjectile(
-                        source,
-                        player.Center + shot.SafeNormalize(aim) * 28f,
-                        shot,
-                        projType,
-                        dmg,
-                        knockback,
-                        player.whoAmI,
-                        ai0: Main.rand.Next(3));
-
-                    if (idx >= 0)
-                    {
-                        Main.projectile[idx].penetrate += ctx.ExtraPierce;
-                        Main.projectile[idx].timeLeft = (int)(System.Math.Max(1, Main.projectile[idx].timeLeft * ctx.LifeMul));
-                        Main.projectile[idx].ai[1] = ctx.HomingMul;
-                    }
-                }
-                SoundEngine.PlaySound(SoundID.Item92, player.Center);
-            }
-
-            SpawnGunVisual(player);
-            return false;
         }
 
         private static bool TryShootCWRTraceBeams(Player player, IEntitySource source, Vector2 aim,
@@ -348,12 +304,35 @@ namespace CStudios.Content.Items.Weapons.Summon
 
         public override void AddRecipes()
         {
-            CreateRecipe()
-                .AddIngredient<ZaphielElectaApex>()
-                .AddIngredient(ItemID.LunarBar, 15)
-                .AddIngredient(ItemID.FragmentNebula, 20)
-                .AddTile(TileID.LunarCraftingStation)
-                .Register();
+            Recipe recipe = CreateRecipe();
+
+            // Previous tier â€” must be listed
+            recipe.AddIngredient(ItemType<ZaphielElectaApex>(), 1);
+
+            if (ModLoader.TryGetMod("CalamityMod", out Mod cal))
+            {
+                if (cal.TryFind("DivineGeode", out ModItem geode))
+                    recipe.AddIngredient(geode.Type, 15);
+
+                if (cal.TryFind("UnholyEssence", out ModItem essence))
+                    recipe.AddIngredient(essence.Type, 20);
+
+                if (cal.TryFind("UelibloomBar", out ModItem ueli))
+                    recipe.AddIngredient(ueli.Type, 10);
+
+                if (cal.TryFind("CosmicAnvil", out ModTile cosmicAnvil))
+                    recipe.AddTile(cosmicAnvil.Type);
+                else
+                    recipe.AddTile(TileID.LunarCraftingStation);
+            }
+            else
+            {
+                recipe.AddIngredient(ItemID.LunarBar, 15);
+                recipe.AddIngredient(ItemID.FragmentNebula, 20);
+                recipe.AddTile(TileID.LunarCraftingStation);
+            }
+
+            recipe.Register();
         }
     }
 }
