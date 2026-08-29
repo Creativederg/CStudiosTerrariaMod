@@ -1,4 +1,4 @@
 displayName = C-Studios Anime Mod
 author = Creativederg
 version = 0.1
-modReferences = CalamityMod, CalamityOverhaul
+modReferences = CalamityMod, CalamityOverhaul, StarsAbove

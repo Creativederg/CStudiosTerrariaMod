@@ -10,6 +10,7 @@ namespace CStudios
         /// <summary>Cached refs after Load. Null if missing (shouldn't happen with modReferences).</summary>
         public static Mod Calamity { get; private set; }
         public static Mod CalamityOverhaul { get; private set; }
+        public static Mod StarsAbove { get; private set; }
 
         public override void Load()
         {
@@ -18,9 +19,11 @@ namespace CStudios
             // Safe lookups (modReferences already forces both to be present)
             ModLoader.TryGetMod("CalamityMod", out Mod calamity);
             ModLoader.TryGetMod("CalamityOverhaul", out Mod cwr);
+            ModLoader.TryGetMod("StarsAbove", out Mod starsAbove);
 
             Calamity = calamity;
             CalamityOverhaul = cwr;
+            StarsAbove = starsAbove;
 
             // Optional hard fail with a clear message
             if (Calamity == null || CalamityOverhaul == null)
@@ -38,6 +41,7 @@ namespace CStudios
             UltimateKey = null;
             Calamity = null;
             CalamityOverhaul = null;
+            StarsAbove = null;
         }
     }
 }
