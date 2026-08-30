@@ -52,6 +52,20 @@ namespace CStudios.Content.Systems.ZaphielModules
         public int AuthorityBonusBits;
         public float AuthorityFormationIntegrity;
 
+        // Aerial Herrscher Form
+        public bool AerialMode;
+        public bool SkybladeManifestActive;
+        public bool ThreeDimensionalLockActive;
+        public bool HerrscherDriveActive;
+        public bool FunnelOverflowActive;
+        public bool AerialSwarmProtocolActive;
+
+        public float AerialFormDurationMul;
+        public float AerialMoveMul;
+        public float FunnelFireRateMul;
+        public float AerialBitIndepMul;
+
+
         public static ZaphielShootContext Default => new()
         {
             DamageMul = 1f,
@@ -98,6 +112,18 @@ namespace CStudios.Content.Systems.ZaphielModules
             AuthorityPatternCostMul = 1f,
             AuthorityBonusBits = 0,
             AuthorityFormationIntegrity = 1f,
+
+            AerialMode = false,
+            SkybladeManifestActive = false,
+            ThreeDimensionalLockActive = false,
+            HerrscherDriveActive = false,
+            FunnelOverflowActive = false,
+            AerialSwarmProtocolActive = false,
+
+            AerialFormDurationMul = 1f,
+            AerialMoveMul = 1f,
+            FunnelFireRateMul = 1f,
+            AerialBitIndepMul = 1f,
         };
     }
 }
