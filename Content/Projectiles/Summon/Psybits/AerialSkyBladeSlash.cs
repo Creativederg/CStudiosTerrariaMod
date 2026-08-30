@@ -21,10 +21,10 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             Projectile.hostile = false;
             Projectile.DamageType = ModContent.GetInstance<PsychokineticDamageClass>();
             Projectile.penetrate = 6;
-            Projectile.timeLeft = 22;
+            Projectile.timeLeft = 40;
             Projectile.tileCollide = false;
             Projectile.ignoreWater = true;
-            Projectile.extraUpdates = 1;
+            Projectile.extraUpdates = 2;
             Projectile.usesLocalNPCImmunity = true;
             Projectile.localNPCHitCooldown = 8;
         }

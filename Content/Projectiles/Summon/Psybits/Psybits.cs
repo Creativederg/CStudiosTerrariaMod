@@ -1,4 +1,4 @@
-﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Terraria;
 using Terraria.GameContent;
@@ -11,6 +11,7 @@ using CStudios.Content.DamageClasses;
 using CStudios.Content.Systems.ZaphielModules;
 using CStudios.Content.Systems.ZaphielModules.Authority;
 using CStudios.Content.Systems.ZaphielModules.Aerial;
+using CStudios.Content.Systems.ZaphielModules.Score;
 using CStudios.Content.Utilities;
 
 namespace CStudios.Content.Projectiles.Summon.Psybits
@@ -220,10 +221,30 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             }
         }
 
+        private float GetScoreMul(Player owner, ZaphielShootContext ctx)
+        {
+            if (!ctx.LivingGaugeActive && !ctx.ScoreMode)
+                return 1f;
+            return owner.GetModPlayer<ZaphielScorePlayer>().DamageFromScore();
+        }
+
+        private void GrantScore(Player owner, ZaphielShootContext ctx, float amount)
+        {
+            if (!ctx.ScoreMode && !ctx.LivingGaugeActive)
+                return;
+            var sp = owner.GetModPlayer<ZaphielScorePlayer>();
+            sp.AddScore(amount, ctx);
+            if (ctx.StigmaResonanceActive)
+                sp.AddStigma(amount * 0.5f, ctx);
+        }
+
         private void HandleOffense(Player owner, ZaphielShootContext ctx, bool foundTarget,
             float distanceFromTarget, Vector2 targetCenter)
         {
             if (owner.HasBuff(BuffType<PsybitBeamAttack>()))
+                return;
+
+            if (ctx.FeedbackHeartActive && owner.GetModPlayer<ZaphielScorePlayer>().InStorm && ctx.DataBacklashActive == false)
                 return;
 
             if (ctx.MeleeMode)
@@ -243,7 +264,8 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
 
                 if (Projectile.owner == Main.myPlayer)
                 {
-                    int dmg = Math.Max(1, (int)(Projectile.damage * ctx.MinionDamageMul * ctx.DamageMul * damageBonus));
+                    int dmg = Math.Max(1, (int)(Projectile.damage * ctx.MinionDamageMul * ctx.DamageMul * damageBonus * GetScoreMul(owner, ctx)));
+                    GrantScore(owner, ctx, 1.8f);
                     Vector2 toTarget = (targetCenter - Projectile.Center).SafeNormalize(Vector2.UnitX);
                     int idx = Projectile.NewProjectile(
                         Projectile.GetSource_FromThis(), Projectile.Center, toTarget,
@@ -277,7 +299,8 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                 if (Projectile.owner != Main.myPlayer)
                     return;
 
-                int dmg = Math.Max(1, (int)(Projectile.damage * ctx.MinionDamageMul * ctx.DamageMul * damageBonus));
+                int dmg = Math.Max(1, (int)(Projectile.damage * ctx.MinionDamageMul * ctx.DamageMul * damageBonus * GetScoreMul(owner, ctx)));
+                GrantScore(owner, ctx, 1.4f);
                 Vector2 shot = (targetCenter - Projectile.Center).SafeNormalize(Vector2.UnitX) * 13f;
 
                 int projType = ProjectileType<PsybitUnchargedLaser>();
@@ -336,7 +359,8 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
 
             if (!hasBeam && Projectile.owner == Main.myPlayer)
             {
-                float mult = (overcharged ? 2.5f : damageBonus) * ctx.MinionDamageMul * ctx.DamageMul;
+                float mult = (overcharged ? 2.5f : damageBonus) * ctx.MinionDamageMul * ctx.DamageMul * GetScoreMul(owner, ctx);
+                GrantScore(owner, ctx, 0.25f);
                 int index = Projectile.NewProjectile(
                     Projectile.GetSource_FromThis(),
                     Projectile.Center, Vector2.Zero,

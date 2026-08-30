@@ -65,6 +65,17 @@ namespace CStudios.Content.Systems.ZaphielModules
         public float FunnelFireRateMul;
         public float AerialBitIndepMul;
 
+        // Score & Stigma
+        public bool ScoreMode;
+        public bool RisingScoreEdgeActive;
+        public bool StigmaResonanceActive;
+        public bool FeedbackHeartActive;
+        public bool DataBacklashActive;
+        public bool LivingGaugeActive;
+        public float ScoreGainMul;      // default 1f
+        public float StigmaBonusMul;    // default 1f
+        public float DataStormMildMul;  // default 1f
+
 
         public static ZaphielShootContext Default => new()
         {
@@ -124,6 +135,16 @@ namespace CStudios.Content.Systems.ZaphielModules
             AerialMoveMul = 1f,
             FunnelFireRateMul = 1f,
             AerialBitIndepMul = 1f,
+
+            ScoreMode = false,
+            RisingScoreEdgeActive = false,
+            StigmaResonanceActive = false,
+            FeedbackHeartActive = false,
+            DataBacklashActive = false,
+            LivingGaugeActive = false,
+            ScoreGainMul = 1f,
+            StigmaBonusMul = 1f,
+            DataStormMildMul = 1f,
         };
     }
 }

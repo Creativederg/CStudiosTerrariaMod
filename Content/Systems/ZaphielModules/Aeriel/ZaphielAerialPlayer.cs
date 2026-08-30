@@ -26,14 +26,12 @@ namespace CStudios.Content.Systems.ZaphielModules.Aerial
                 FormActive = true;
                 Strain = MathHelper.Clamp(Strain + 0.004f, 0f, 1f);
 
-                // Air control while formed
                 float move = ctx.AerialMoveMul > 0f ? ctx.AerialMoveMul : 1.35f;
                 Player.maxRunSpeed *= move;
                 Player.moveSpeed += 0.12f * move;
                 Player.slowFall = true;
                 Player.noFallDmg = true;
 
-                // Extra jump / hover
                 if (Player.controlJump)
                 {
                     Player.velocity.Y -= 0.35f * move;
