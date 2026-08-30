@@ -1,4 +1,5 @@
 using CStudios.Content.Systems.ZaphielModules;
+using CStudios.Content.Items.Modules.Zaphiel;
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.ID;

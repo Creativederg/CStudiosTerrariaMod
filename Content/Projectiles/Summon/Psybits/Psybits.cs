@@ -10,6 +10,7 @@ using CStudios.Content.Buffs;
 using CStudios.Content.DamageClasses;
 using CStudios.Content.Systems.ZaphielModules;
 using CStudios.Content.Systems.ZaphielModules.Authority;
+using CStudios.Content.Systems.ZaphielModules.Aerial;
 using CStudios.Content.Utilities;
 
 namespace CStudios.Content.Projectiles.Summon.Psybits
@@ -152,11 +153,11 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                 Projectile.localAI[0] = 0f;
 
             bool inPattern = AuthorityPatternAI.TryRunPatternAI(Projectile, owner, ctx);
+            bool inAerial = !inPattern && AerialBitAI.TryRunAerialAI(Projectile, owner, ctx);
 
             GeneralBehavior(owner, out Vector2 vectorToIdlePosition, out float distanceToIdlePosition);
             SearchForTargets(owner, ctx, out bool foundTarget, out float distanceFromTarget, out Vector2 targetCenter);
 
-            // Prefer the Authority locked target while a pattern is running
             if (inPattern)
             {
                 var ap = owner.GetModPlayer<ZaphielAuthorityPlayer>();
@@ -171,14 +172,9 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                         Projectile.localAI[1] = npc.whoAmI;
                     }
                 }
-                else if (ap.LockedWorldPosition != Vector2.Zero)
-                {
-                    foundTarget = true;
-                    targetCenter = ap.LockedWorldPosition;
-                    distanceFromTarget = Vector2.Distance(Projectile.Center, targetCenter);
-                }
             }
-            else
+
+            if (!inPattern && !inAerial)
             {
                 Movement(owner, ctx, foundTarget, distanceFromTarget, targetCenter,
                     distanceToIdlePosition, vectorToIdlePosition);
@@ -271,6 +267,9 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                     return;
 
                 int interval = 22;
+                if (ctx.FunnelFireRateMul > 0f)
+                    interval = Math.Max(8, (int)(interval / ctx.FunnelFireRateMul));
+
                 if (Projectile.ai[0] < interval)
                     return;
                 Projectile.ai[0] = 0;
