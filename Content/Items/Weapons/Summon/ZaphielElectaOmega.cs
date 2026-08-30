@@ -1,10 +1,11 @@
-﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework;
 using CStudios.Content.Buffs;
 using CStudios.Content.DamageClasses;
 using CStudios.Content.Projectiles.Summon.Psybits;
 using CStudios.Content.Systems.ZaphielModules;
 using CStudios.Content.Systems.ZaphielModules.Authority;
 using CStudios.Content.Systems.ZaphielModules.Aerial;
+using CStudios.Content.Systems.ZaphielModules.Score;
 using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
@@ -115,28 +116,6 @@ namespace CStudios.Content.Items.Weapons.Summon
         {
             var ctx = ZaphielModuleSystem.Resolve(player);
 
-            bool skybladeForm = ctx.SkybladeManifestActive
-                && player.GetModPlayer<ZaphielAerialPlayer>().FormActive;
-
-            if (ctx.MeleeMode)
-            {
-                Item.noUseGraphic = false;
-                Item.channel = false;
-                Item.useStyle = ItemUseStyleID.Swing;
-            }
-            else if (ctx.TraceVolleyMode || skybladeForm)
-            {
-                Item.noUseGraphic = true;
-                Item.channel = false;          // click slashes, not a held beam
-                Item.useStyle = ItemUseStyleID.Shoot;
-            }
-            else
-            {
-                Item.noUseGraphic = true;
-                Item.channel = true;
-                Item.useStyle = ItemUseStyleID.Shoot;
-            }
-
             if (ctx.MeleeMode)
             {
                 Item.noUseGraphic = false;
@@ -171,6 +150,12 @@ namespace CStudios.Content.Items.Weapons.Summon
             if (ctx.HerrscherDriveActive)
             {
                 AerialHerrscherSystem.TryActivateForm(player);
+                return;
+            }
+
+            if (ctx.FeedbackHeartActive)
+            {
+                ScoreStigmaSystem.TryBurst(player);
                 return;
             }
 
@@ -235,57 +220,6 @@ namespace CStudios.Content.Items.Weapons.Summon
             var ctx = ZaphielModuleSystem.Resolve(player);
             int dmg = System.Math.Max(1, (int)(damage * ctx.DamageMul));
             Vector2 aim = velocity.SafeNormalize(Vector2.UnitX);
-
-            var aerial = player.GetModPlayer<ZaphielAerialPlayer>();
-            if (ctx.SkybladeManifestActive && aerial.FormActive)
-            {
-                int slashes = System.Math.Max(3, 3 + ctx.BeamCountAdd);
-                float arc = 0.55f * ctx.SpreadMul;
-                float speed = 16f * (ctx.BeamSpeedMul > 0f ? ctx.BeamSpeedMul : 1f);
-
-                for (int i = 0; i < slashes; i++)
-                {
-                    float t = slashes == 1 ? 0f : (i / (float)(slashes - 1) - 0.5f);
-                    Vector2 vel = aim.RotatedBy(t * arc) * speed;
-
-                    int idx = Projectile.NewProjectile(
-                        source, player.Center + aim * 28f, vel,
-                        ProjectileType<AerialSkybladeSlash>(),
-                        dmg, knockback, player.whoAmI);
-
-                    if (idx >= 0)
-                    {
-                        Main.projectile[idx].scale = 1.2f + 0.15f * System.Math.Abs(t);
-                        Main.projectile[idx].penetrate += ctx.ExtraPierce;
-                    }
-                }
-
-                int ribbons = ctx.FunnelOverflowActive ? 3 : 2;
-                for (int i = 0; i < ribbons; i++)
-                {
-                    float off = (i - (ribbons - 1) * 0.5f) * 0.18f;
-                    int idx = Projectile.NewProjectile(
-                        source,
-                        player.Center + aim * 20f,
-                        aim.RotatedBy(off) * speed * 0.75f,
-                        ProjectileType<PsybitUnchargedLaser>(),
-                        System.Math.Max(1, (int)(dmg * 0.75f)),
-                        knockback * 0.6f,
-                        player.whoAmI);
-
-                    if (idx >= 0)
-                    {
-                        Main.projectile[idx].timeLeft = 28;
-                        Main.projectile[idx].extraUpdates = 1;
-                        Main.projectile[idx].penetrate = -1;
-                        Main.projectile[idx].scale = 1.35f;
-                    }
-                }
-
-                SoundEngine.PlaySound(SoundID.Item71, player.Center);
-                SpawnGunVisual(player);
-                return false;
-            }
 
             if (ctx.MeleeMode)
             {
