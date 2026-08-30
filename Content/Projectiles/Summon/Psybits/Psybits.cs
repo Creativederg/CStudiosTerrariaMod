@@ -9,8 +9,8 @@ using System;
 using CStudios.Content.Buffs;
 using CStudios.Content.DamageClasses;
 using CStudios.Content.Systems.ZaphielModules;
-using CStudios.Content.Utilities;
 using CStudios.Content.Systems.ZaphielModules.Authority;
+using CStudios.Content.Utilities;
 
 namespace CStudios.Content.Projectiles.Summon.Psybits
 {
@@ -19,10 +19,6 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         public ref float PsybitID => ref Projectile.ai[2];
 
         float damageBonus = 1f;
-
-        // localAI[0] = overcharge assemble
-        // localAI[1] = target whoAmI
-        // localAI[2] = random-orbit retarget timer
 
         public override void SetStaticDefaults()
         {
@@ -137,27 +133,14 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         public override void AI()
         {
             Player owner = Main.player[Projectile.owner];
+            ProjectileID.Sets.TrailCacheLength[Projectile.type] = 40;
             if (!CheckActive(owner))
                 return;
 
-            ZaphielShootContext ctx = ZaphielModuleSystem.Resolve(owner);
-
-            // Slot cost (Throne of Bits / future TwinLink)
-            Projectile.minionSlots = ctx.MinionSlotsPerBit > 0f ? ctx.MinionSlotsPerBit : 1f;
-
-            // Authority patterns override normal AI
-            if (CStudios.Content.Systems.ZaphielModules.Authority.AuthorityPatternAI
-                    .TryRunPatternAI(Projectile, owner, ctx))
-            {
-                Visuals();
-                return;
-            }
-
             Projectile.frame = (int)PsybitID;
-
-            ProjectileID.Sets.TrailCacheLength[Projectile.type] = 40;
-
             ZaphielShootContext ctx = ZaphielModuleSystem.Resolve(owner);
+
+            Projectile.minionSlots = ctx.MinionSlotsPerBit > 0f ? ctx.MinionSlotsPerBit : 1f;
 
             if (owner.HasBuff(BuffType<PsybitOvercharge>()))
             {
@@ -168,9 +151,39 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             else
                 Projectile.localAI[0] = 0f;
 
+            bool inPattern = AuthorityPatternAI.TryRunPatternAI(Projectile, owner, ctx);
+
             GeneralBehavior(owner, out Vector2 vectorToIdlePosition, out float distanceToIdlePosition);
             SearchForTargets(owner, ctx, out bool foundTarget, out float distanceFromTarget, out Vector2 targetCenter);
-            Movement(owner, ctx, foundTarget, distanceFromTarget, targetCenter, distanceToIdlePosition, vectorToIdlePosition);
+
+            // Prefer the Authority locked target while a pattern is running
+            if (inPattern)
+            {
+                var ap = owner.GetModPlayer<ZaphielAuthorityPlayer>();
+                if (ap.LockedTargetWhoAmI >= 0 && ap.LockedTargetWhoAmI < Main.maxNPCs)
+                {
+                    NPC npc = Main.npc[ap.LockedTargetWhoAmI];
+                    if (npc.active && npc.CanBeChasedBy())
+                    {
+                        foundTarget = true;
+                        targetCenter = npc.Center;
+                        distanceFromTarget = Vector2.Distance(Projectile.Center, targetCenter);
+                        Projectile.localAI[1] = npc.whoAmI;
+                    }
+                }
+                else if (ap.LockedWorldPosition != Vector2.Zero)
+                {
+                    foundTarget = true;
+                    targetCenter = ap.LockedWorldPosition;
+                    distanceFromTarget = Vector2.Distance(Projectile.Center, targetCenter);
+                }
+            }
+            else
+            {
+                Movement(owner, ctx, foundTarget, distanceFromTarget, targetCenter,
+                    distanceToIdlePosition, vectorToIdlePosition);
+            }
+
             Visuals();
             HandleOffense(owner, ctx, foundTarget, distanceFromTarget, targetCenter);
 
@@ -217,7 +230,6 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             if (owner.HasBuff(BuffType<PsybitBeamAttack>()))
                 return;
 
-            // Melee tip module
             if (ctx.MeleeMode)
             {
                 ClearLinkedBeams(owner);
@@ -250,12 +262,11 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                 return;
             }
 
-            // Swarm Pattern: single volley bolt, no continuous beam
             if (ctx.MinionVolleyShot)
             {
                 ClearLinkedBeams(owner);
 
-                float maxRange = 500f * ctx.MinionFireRangeMul;
+                float maxRange = 900f * ctx.MinionFireRangeMul;
                 if (!foundTarget || distanceFromTarget >= maxRange)
                     return;
 
@@ -290,8 +301,7 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                 return;
             }
 
-            // Default continuous beams
-            float beamRange = 500f * ctx.MinionFireRangeMul;
+            float beamRange = 900f * ctx.MinionFireRangeMul;
             if (!foundTarget || distanceFromTarget >= beamRange)
                 return;
 
@@ -494,7 +504,6 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             float moveMul = ctx.MinionMoveSpeedMul;
             float orbitMul = ctx.MinionOrbitRadiusMul;
 
-            // Random orbit (Swarm Pattern)
             if (foundTarget && ctx.MinionRandomOrbit)
             {
                 float engage = ctx.MeleeMode ? 90f : 320f;
