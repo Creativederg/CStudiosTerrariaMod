@@ -22,9 +22,7 @@ namespace CStudios.Content.Items.Modules.Zaphiel
             ctx.CommandLanceActive = true;
 
             ctx.DamageMul *= 0.65f;
-            ctx.ContinuousBeam = false;
             ctx.MeleeMode = false;
-            ctx.TraceVolleyMode = false;
 
             ctx.MinionDamageMul *= 1.25f;
             ctx.MinionAggressiveChase = true;

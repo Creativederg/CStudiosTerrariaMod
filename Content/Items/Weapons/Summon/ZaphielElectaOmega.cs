@@ -37,7 +37,7 @@ namespace CStudios.Content.Items.Weapons.Summon
             Item.autoReuse = true;
             Item.noUseGraphic = true;
             Item.noMelee = true;
-            Item.channel = true; // default single beam channels
+            Item.channel = true;
             Item.shoot = ProjectileID.WoodenArrowFriendly;
             Item.shootSpeed = 18f;
             Item.mana = 6;
@@ -48,9 +48,7 @@ namespace CStudios.Content.Items.Weapons.Summon
         private int GetEffectiveMaxBits(Player player)
         {
             var ctx = ZaphielModuleSystem.Resolve(player);
-            // Use the weapon's own MaxBits const, or 11 for Apex/Omega
-            int baseMax = MaxBits; // or 11
-            int effective = (int)(baseMax * ctx.MaxBitsMul) + ctx.AuthorityBonusBits;
+            int effective = (int)(MaxBits * ctx.MaxBitsMul) + ctx.AuthorityBonusBits;
             return System.Math.Max(1, effective);
         }
 
@@ -68,10 +66,9 @@ namespace CStudios.Content.Items.Weapons.Summon
 
         public override void ModifyManaCost(Player player, ref float reduce, ref float mult)
         {
-            var ctx = ZaphielModuleSystem.Resolve(player); // Omega only
+            var ctx = ZaphielModuleSystem.Resolve(player);
             mult *= ctx.ManaCostMul;
 
-            // Continuous beam: beam AI pays mana; avoid full cost every useTime
             if (player.channel && !ctx.MeleeMode && !ctx.TraceVolleyMode)
                 mult = 0f;
         }
@@ -105,9 +102,6 @@ namespace CStudios.Content.Items.Weapons.Summon
         public override bool CanUseItem(Player player)
         {
             if (player.altFunctionUse == 2)
-                return player.ownedProjectileCounts[ProjectileType<Psybits>()] < GetEffectiveMaxBits(player);
-
-            if (player.altFunctionUse == 2)
             {
                 if (player.ownedProjectileCounts[ProjectileType<Psybits>()] < 1)
                     return true;
@@ -120,6 +114,7 @@ namespace CStudios.Content.Items.Weapons.Summon
         {
             var ctx = ZaphielModuleSystem.Resolve(player);
 
+            // Left-click mode MUST be set before any Authority return
             if (ctx.MeleeMode)
             {
                 Item.noUseGraphic = false;
@@ -128,14 +123,12 @@ namespace CStudios.Content.Items.Weapons.Summon
             }
             else if (ctx.TraceVolleyMode)
             {
-                // Splinter Beam: click volleys, no channel
                 Item.noUseGraphic = true;
                 Item.channel = false;
                 Item.useStyle = ItemUseStyleID.Shoot;
             }
             else
             {
-                // Default: hold for single continuous beam
                 Item.noUseGraphic = true;
                 Item.channel = true;
                 Item.useStyle = ItemUseStyleID.Shoot;
@@ -144,10 +137,11 @@ namespace CStudios.Content.Items.Weapons.Summon
             if (player.whoAmI != Main.myPlayer)
                 return;
 
+            // Authority patterns use Ultimate key only — left click stays the beam
             if (ctx.AuthorityCoreActive)
             {
                 if (CStudios.UltimateKey != null && CStudios.UltimateKey.JustPressed)
-                    CStudios.Content.Systems.ZaphielModules.Authority.AuthorityPatternSystem.TryActivatePattern(player);
+                    AuthorityPatternSystem.TryActivatePattern(player);
                 return;
             }
 
@@ -169,9 +163,10 @@ namespace CStudios.Content.Items.Weapons.Summon
             // ===== RIGHT CLICK =====
             if (player.altFunctionUse == 2)
             {
+                int effectiveMax = GetEffectiveMaxBits(player);
+
                 if (player.ownedProjectileCounts[ProjectileType<Psybits>()] < 1 && player.whoAmI == Main.myPlayer)
                 {
-                    int effectiveMax = GetEffectiveMaxBits(player);
                     for (int i = 0; i < effectiveMax; i++)
                     {
                         Projectile.NewProjectile(
@@ -216,7 +211,6 @@ namespace CStudios.Content.Items.Weapons.Summon
             int dmg = System.Math.Max(1, (int)(damage * ctx.DamageMul));
             Vector2 aim = velocity.SafeNormalize(Vector2.UnitX);
 
-            // 1) Melee (Apex Edge)
             if (ctx.MeleeMode)
             {
                 int idx = Projectile.NewProjectile(source, player.Center + aim * 48f, aim,
@@ -233,12 +227,10 @@ namespace CStudios.Content.Items.Weapons.Summon
                 return false;
             }
 
-            // 2) Splinter Beam → SHPC-style cyber trace volleys
             if (ctx.TraceVolleyMode)
             {
                 if (!TryShootCWRTraceBeams(player, source, aim, dmg, knockback, ctx))
                 {
-                    // Fallback without CWR
                     int beams = System.Math.Max(1, 3 + ctx.BeamCountAdd);
                     float spread = 0.08f * ctx.SpreadMul;
                     Vector2 baseVel = aim * (14f * ctx.BeamSpeedMul);
@@ -257,7 +249,7 @@ namespace CStudios.Content.Items.Weapons.Summon
                 return false;
             }
 
-            // 3) Default → single continuous beam
+            // Default charged / continuous beam
             {
                 int beamType = ProjectileType<PsybitPlayerBeam>();
                 if (player.ownedProjectileCounts[beamType] < 1)
@@ -328,8 +320,6 @@ namespace CStudios.Content.Items.Weapons.Summon
         public override void AddRecipes()
         {
             Recipe recipe = CreateRecipe();
-
-            // Previous tier — must be listed
             recipe.AddIngredient(ItemType<ZaphielElectaApex>(), 1);
 
             if (ModLoader.TryGetMod("CalamityMod", out Mod cal))
@@ -342,19 +332,15 @@ namespace CStudios.Content.Items.Weapons.Summon
 
                 if (cal.TryFind("UelibloomBar", out ModItem ueli))
                     recipe.AddIngredient(ueli.Type, 10);
-
-                if (cal.TryFind("CosmicAnvil", out ModTile cosmicAnvil))
-                    recipe.AddTile(cosmicAnvil.Type);
-                else
-                    recipe.AddTile(TileID.LunarCraftingStation);
             }
             else
             {
-                recipe.AddIngredient(ItemID.LunarBar, 15);
-                recipe.AddIngredient(ItemID.FragmentNebula, 20);
-                recipe.AddTile(TileID.LunarCraftingStation);
+                recipe.AddIngredient(ItemID.LunarBar, 12);
+                recipe.AddIngredient(ItemID.FragmentNebula, 15);
+                recipe.AddIngredient(ItemID.FragmentStardust, 15);
             }
 
+            recipe.AddTile(TileID.LunarCraftingStation);
             recipe.Register();
         }
     }

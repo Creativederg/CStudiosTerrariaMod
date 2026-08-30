@@ -46,6 +46,9 @@ namespace CStudios.Content.Systems.ZaphielModules.Authority
                     break;
             }
 
+            // Always shoot during patterns (Swarm Pattern / charged beam / etc.)
+            TryPatternFire(bit, owner, targetPos, power, ctx, bitIndex, pattern);
+
             return true;
         }
 
@@ -60,13 +63,65 @@ namespace CStudios.Content.Systems.ZaphielModules.Authority
             return ap.LockedWorldPosition;
         }
 
+        private static void TryPatternFire(Projectile bit, Player owner, Vector2 targetPos,
+            float power, ZaphielShootContext ctx, int bitIndex, AuthorityPatternType pattern)
+        {
+            if (bit.owner != Main.myPlayer)
+                return;
+
+            // Aegis Wall is defensive — fire slower. Bombardment fires faster.
+            int interval = pattern switch
+            {
+                AuthorityPatternType.OrbitalBombardment => 14,
+                AuthorityPatternType.AegisWall => 28,
+                AuthorityPatternType.SpiralExecution => 16,
+                _ => 20
+            };
+
+            if (ctx.MinionVolleyShot)
+                interval = System.Math.Max(10, interval - 6);
+
+            if ((Main.GameUpdateCount + bitIndex * 3) % interval != 0)
+                return;
+
+            Vector2 dir = (targetPos - bit.Center).SafeNormalize(Vector2.UnitY);
+            if (dir == Vector2.Zero)
+                return;
+
+            // Use the same projectiles your normal HandleOffense uses
+            int projType = ctx.MinionUseChargedBeam
+                ? ProjectileType<PsybitMinionChargedBeam>()
+                : ProjectileType<PsybitMinionBeam>();
+
+            int dmg = System.Math.Max(1, (int)(bit.damage * ctx.MinionDamageMul * power));
+            float speed = 13f * (ctx.BeamSpeedMul > 0f ? ctx.BeamSpeedMul : 1f);
+
+            // Swarm Pattern: extra spread shots
+            int shots = ctx.MinionVolleyShot ? 3 : 1;
+            float spread = ctx.MinionVolleyShot ? 0.12f : 0f;
+
+            for (int i = 0; i < shots; i++)
+            {
+                float off = shots > 1 ? (i - (shots - 1) / 2f) * spread : 0f;
+                Vector2 vel = dir.RotatedBy(off) * speed;
+
+                Projectile.NewProjectile(
+                    bit.GetSource_FromThis(),
+                    bit.Center,
+                    vel,
+                    projType,
+                    dmg,
+                    bit.knockBack,
+                    owner.whoAmI);
+            }
+        }
+
         private static void RunGiantLance(Projectile bit, Player owner, Vector2 targetPos,
             int bitIndex, int totalBits, float power, ZaphielShootContext ctx)
         {
             Vector2 dir = (targetPos - owner.Center).SafeNormalize(Vector2.UnitX);
-            float spacing = 28f * ctx.AuthorityFormationIntegrity;
-            float startOffset = 60f;
-            Vector2 desired = owner.Center + dir * (startOffset + bitIndex * spacing);
+            float spacing = 28f * System.Math.Max(ctx.AuthorityFormationIntegrity, 0.25f);
+            Vector2 desired = owner.Center + dir * (60f + bitIndex * spacing);
             bit.velocity = (desired - bit.Center) * 0.18f;
             bit.friendly = true;
         }
@@ -74,7 +129,7 @@ namespace CStudios.Content.Systems.ZaphielModules.Authority
         private static void RunBindingCage(Projectile bit, Player owner, Vector2 targetPos,
             int bitIndex, int totalBits, float power, ZaphielShootContext ctx)
         {
-            float radius = 110f * ctx.AuthorityFormationIntegrity;
+            float radius = 110f * System.Math.Max(ctx.AuthorityFormationIntegrity, 0.25f);
             float angle = MathHelper.TwoPi * bitIndex / totalBits
                         + (float)Main.GameUpdateCount * 0.045f;
             Vector2 desired = targetPos + new Vector2(
@@ -93,8 +148,6 @@ namespace CStudios.Content.Systems.ZaphielModules.Authority
                 (float)System.Math.Cos(angle) * 90f,
                 -height);
             bit.velocity = (desired - bit.Center) * 0.15f;
-
-            // Optional: spawn downward beams here using your existing laser projectile
         }
 
         private static void RunAegisWall(Projectile bit, Player owner, Vector2 targetPos,
@@ -102,20 +155,21 @@ namespace CStudios.Content.Systems.ZaphielModules.Authority
         {
             Vector2 dir = (targetPos - owner.Center).SafeNormalize(Vector2.UnitX);
             Vector2 perp = dir.RotatedBy(MathHelper.PiOver2);
-            float width = 28f * ctx.AuthorityFormationIntegrity;
-            float centerOffset = 70f;
+            float width = 28f * System.Math.Max(ctx.AuthorityFormationIntegrity, 0.25f);
             float t = bitIndex - (totalBits - 1) * 0.5f;
-            Vector2 desired = owner.Center + dir * centerOffset + perp * (t * width);
+            Vector2 desired = owner.Center + dir * 70f + perp * (t * width);
             bit.velocity = (desired - bit.Center) * 0.20f;
         }
 
         private static void RunSpiralExecution(Projectile bit, Player owner, Vector2 targetPos,
             int bitIndex, int totalBits, float power, ZaphielShootContext ctx, ZaphielAuthorityPlayer ap)
         {
-            float progress = 1f - (ap.PatternTimer / (float)ZaphielAuthorityPlayer.GetBaseDuration(AuthorityPatternType.SpiralExecution));
+            float baseDur = ZaphielAuthorityPlayer.GetBaseDuration(AuthorityPatternType.SpiralExecution);
+            float progress = 1f - (ap.PatternTimer / baseDur);
             progress = MathHelper.Clamp(progress, 0f, 1f);
 
-            float radius = MathHelper.Lerp(160f, 12f, progress) * ctx.AuthorityFormationIntegrity;
+            float radius = MathHelper.Lerp(160f, 12f, progress)
+                         * System.Math.Max(ctx.AuthorityFormationIntegrity, 0.25f);
             float angle = MathHelper.TwoPi * bitIndex / totalBits
                         + progress * MathHelper.TwoPi * 2.5f
                         + (float)Main.GameUpdateCount * 0.03f;
