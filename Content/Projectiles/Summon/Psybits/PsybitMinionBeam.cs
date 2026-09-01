@@ -4,6 +4,8 @@ using CStudios.Content.DamageClasses;
 using CStudios.Content.Buffs;
 using CStudios.Content.NPCs;
 using CStudios.Content.Items.Weapons.Summon;
+using CStudios.Content.Systems.ZaphielModules;
+using CStudios.Content.Systems.ZaphielModules.Score;
 using System;
 using Terraria;
 using Terraria.GameContent;
@@ -14,9 +16,6 @@ using static Terraria.ModLoader.ModContent;
 
 namespace CStudios.Content.Projectiles.Summon.Psybits
 {
-    // Continuous beam fired by a Psybits minion
-    // ai[1] = parent Psybits projectile whoAmI
-    // localAI[1] = current target NPC whoAmI (-1 if none)
     public class PsybitMinionBeam : ModProjectile
     {
         private const float MOVE_DISTANCE = 8f;
@@ -43,11 +42,15 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             Projectile.hide = false;
             Projectile.timeLeft = 2;
             Projectile.minion = false;
+            Projectile.usesLocalNPCImmunity = true;
+            Projectile.localNPCHitCooldown = 8;
         }
 
         public override bool PreDraw(ref Color lightColor)
         {
             if (Distance < 10f)
+                return false;
+            if (ParentIdentity < 0 || ParentIdentity >= Main.maxProjectiles)
                 return false;
 
             Projectile parent = Main.projectile[ParentIdentity];
@@ -74,7 +77,6 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             float step, float rotation, float scale, float maxDist, Color color, int transDist)
         {
             float r = unit.ToRotation() + rotation;
-
             for (float i = transDist; i <= Distance; i += step)
             {
                 Vector2 origin = start + i * unit;
@@ -82,10 +84,8 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                     new Rectangle(0, 26, 36, 26), i < transDist ? Color.Transparent : color * 0.85f, r,
                     new Vector2(18f, 13f), scale, 0, 0);
             }
-
             spriteBatch.Draw(texture, start + unit * (transDist - step) - Main.screenPosition,
                 new Rectangle(0, 0, 36, 26), color * 0.85f, r, new Vector2(18f, 13f), scale, 0, 0);
-
             spriteBatch.Draw(texture, start + (Distance + step) * unit - Main.screenPosition,
                 new Rectangle(0, 52, 36, 26), color * 0.85f, r, new Vector2(18f, 13f), scale, 0, 0);
         }
@@ -94,26 +94,26 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         {
             if (Distance < 10f)
                 return false;
-
+            if (ParentIdentity < 0 || ParentIdentity >= Main.maxProjectiles)
+                return false;
             Projectile parent = Main.projectile[ParentIdentity];
             if (!parent.active)
                 return false;
-
             Vector2 start = parent.Center + Projectile.velocity * MOVE_DISTANCE;
             float point = 0f;
-
             return Collision.CheckAABBvLineCollision(
                 targetHitbox.TopLeft(), targetHitbox.Size(),
-                start, start + Projectile.velocity * Distance,
-                6, ref point);
+                start, start + Projectile.velocity * Distance, 6, ref point);
         }
 
         public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
         {
-            // Higher immunity so 11 beams don't melt everything instantly
-            target.immune[Projectile.owner] = 10;
+            Player owner = Main.player[Projectile.owner];
+            var ctx = ZaphielModuleSystem.Resolve(owner);
+            if (ctx.ScoreMode || ctx.LivingGaugeActive || ctx.RisingScoreEdgeActive || ctx.FeedbackHeartActive)
+                owner.GetModPlayer<ZaphielScorePlayer>().AddScore(0.35f, ctx);
 
-            int held = Main.player[Projectile.owner].HeldItem.type;
+            int held = owner.HeldItem.type;
             bool applyEntropic =
                 held == ItemType<ZaphielElectaResonator>()
                 || held == ItemType<ZaphielElectaSurge>()
@@ -131,7 +131,6 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
 
         public override void AI()
         {
-            // Validate parent minion
             if (ParentIdentity < 0 || ParentIdentity >= Main.maxProjectiles)
             {
                 Projectile.Kill();
@@ -145,10 +144,13 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                 return;
             }
 
+            Player owner = Main.player[Projectile.owner];
+            var ctx = ZaphielModuleSystem.Resolve(owner);
+            Projectile.localNPCHitCooldown = ZaphielBeamHitDelay.For(ctx);
+
             Projectile.timeLeft = 2;
             Projectile.Center = parent.Center;
 
-            // Read target from parent (parent stores it in localAI[1])
             int targetId = (int)parent.localAI[1];
             if (targetId < 0 || targetId >= Main.maxNPCs)
             {
@@ -172,68 +174,23 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             }
 
             Projectile.velocity = toTarget.SafeNormalize(Vector2.UnitX);
-            SetLaserPosition(parent.Center, target.Center);
+            Distance = Math.Max(MOVE_DISTANCE, Math.Min(dist, MAX_RANGE));
             SpawnDusts(parent.Center);
-        }
-
-        private void SetLaserPosition(Vector2 from, Vector2 to)
-        {
-            // Stretch to target (or max range), ignore tiles
-            float maxDist = Vector2.Distance(from, to);
-            Distance = Math.Min(maxDist, MAX_RANGE);
-            if (Distance < MOVE_DISTANCE)
-                Distance = MOVE_DISTANCE;
         }
 
         private void SpawnDusts(Vector2 from)
         {
             if (Distance < 10f)
                 return;
-
             Vector2 end = from + Projectile.velocity * Distance;
             Color dustColor = new Color(255, 40, 40);
-
-            // Tip
             if (Main.rand.NextBool(2))
             {
-                Dust d = Dust.NewDustPerfect(end, DustID.Electric,
-                    Main.rand.NextVector2Circular(1.8f, 1.8f), 150, dustColor, 0.9f);
+                Dust d = Dust.NewDustPerfect(end, DustID.Electric, Main.rand.NextVector2Circular(1.8f, 1.8f), 150, dustColor, 0.9f);
                 d.noGravity = true;
-                d.color = dustColor;
-            }
-
-            // Muzzle (minion body)
-            if (Main.rand.NextBool(3))
-            {
-                Vector2 muzzleVel = Projectile.velocity.RotatedByRandom(0.4f) * Main.rand.NextFloat(1f, 4f);
-                Dust d = Dust.NewDustPerfect(from, DustID.Electric, muzzleVel, 150, dustColor, 0.8f);
-                d.noGravity = true;
-                d.color = dustColor;
-            }
-
-            // Sparse body particles along the beam
-            if (Main.rand.NextBool(4))
-            {
-                float t = Main.rand.NextFloat(0.15f, 0.9f);
-                Vector2 pos = from + Projectile.velocity * (Distance * t);
-                Dust d = Dust.NewDustPerfect(pos, DustID.Electric, Vector2.Zero, 150, dustColor, 0.7f);
-                d.noGravity = true;
-                d.color = dustColor;
             }
         }
 
         public override bool ShouldUpdatePosition() => false;
-
-        public override void CutTiles()
-        {
-            Projectile parent = Main.projectile[ParentIdentity];
-            if (!parent.active)
-                return;
-
-            Vector2 start = parent.Center;
-            DelegateMethods.tilecut_0 = TileCuttingContext.AttackProjectile;
-            Utils.PlotTileLine(start, start + Projectile.velocity * Distance,
-                (Projectile.width + 12) * Projectile.scale, DelegateMethods.CutTiles);
-        }
     }
 }

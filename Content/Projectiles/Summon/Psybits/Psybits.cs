@@ -12,6 +12,7 @@ using CStudios.Content.Systems.ZaphielModules;
 using CStudios.Content.Systems.ZaphielModules.Authority;
 using CStudios.Content.Systems.ZaphielModules.Aerial;
 using CStudios.Content.Systems.ZaphielModules.Score;
+using CStudios.Content.Systems.ZaphielModules.Fracture;
 using CStudios.Content.Utilities;
 
 namespace CStudios.Content.Projectiles.Summon.Psybits
@@ -21,6 +22,7 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         public ref float PsybitID => ref Projectile.ai[2];
 
         float damageBonus = 1f;
+        private int _echoCooldown;
 
         public override void SetStaticDefaults()
         {
@@ -141,6 +143,7 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
 
             Projectile.frame = (int)PsybitID;
             ZaphielShootContext ctx = ZaphielModuleSystem.Resolve(owner);
+            var frac = owner.GetModPlayer<ZaphielFracturePlayer>();
 
             Projectile.minionSlots = ctx.MinionSlotsPerBit > 0f ? ctx.MinionSlotsPerBit : 1f;
 
@@ -179,6 +182,43 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             {
                 Movement(owner, ctx, foundTarget, distanceFromTarget, targetCenter,
                     distanceToIdlePosition, vectorToIdlePosition);
+            }
+
+            if (ctx.PermetAfterimageActive && frac.FractureActive && !inPattern)
+            {
+                Vector2 toEcho = frac.LastEcho - Projectile.Center;
+                if (frac.LastEcho != Vector2.Zero && toEcho.LengthSquared() > 16f)
+                    Projectile.velocity += toEcho.SafeNormalize(Vector2.Zero) * 0.35f;
+            }
+
+            if (ctx.PermetAfterimageActive && frac.FractureActive && Projectile.owner == Main.myPlayer)
+            {
+                if (_echoCooldown > 0)
+                    _echoCooldown--;
+                else
+                {
+                    _echoCooldown = 12;
+                    Vector2 behind = Projectile.Center
+                        - (Projectile.velocity.LengthSquared() > 0.4f
+                            ? Projectile.velocity.SafeNormalize(Vector2.UnitY) * 18f
+                            : new Vector2(0f, 18f));
+
+                    int eidx = Projectile.NewProjectile(
+                        Projectile.GetSource_FromThis(),
+                        behind,
+                        Projectile.velocity * 0.15f,
+                        ProjectileType<PermetEcho>(),
+                        0, 0f, owner.whoAmI,
+                        ai0: PsybitID,
+                        ai1: Projectile.rotation);
+
+                    if (eidx >= 0)
+                    {
+                        Main.projectile[eidx].frame = Projectile.frame;
+                        Main.projectile[eidx].spriteDirection = Projectile.spriteDirection;
+                        Main.projectile[eidx].scale = Projectile.scale;
+                    }
+                }
             }
 
             Visuals();
@@ -230,7 +270,7 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
 
         private void GrantScore(Player owner, ZaphielShootContext ctx, float amount)
         {
-            if (!ctx.ScoreMode && !ctx.LivingGaugeActive)
+            if (!ctx.ScoreMode && !ctx.LivingGaugeActive && !ctx.RisingScoreEdgeActive && !ctx.FeedbackHeartActive)
                 return;
             var sp = owner.GetModPlayer<ZaphielScorePlayer>();
             sp.AddScore(amount, ctx);
@@ -258,6 +298,9 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                     return;
 
                 int interval = Math.Max(8, ctx.MeleeStrikeInterval);
+                var fracMelee = owner.GetModPlayer<ZaphielFracturePlayer>();
+                if (fracMelee.FractureActive && ctx.PhantomBitsActive)
+                    interval = Math.Max(5, interval / 2);
                 if (Projectile.ai[0] < interval)
                     return;
                 Projectile.ai[0] = 0;
@@ -265,7 +308,7 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                 if (Projectile.owner == Main.myPlayer)
                 {
                     int dmg = Math.Max(1, (int)(Projectile.damage * ctx.MinionDamageMul * ctx.DamageMul * damageBonus * GetScoreMul(owner, ctx)));
-                    GrantScore(owner, ctx, 1.8f);
+                    GrantScore(owner, ctx, 4f);
                     Vector2 toTarget = (targetCenter - Projectile.Center).SafeNormalize(Vector2.UnitX);
                     int idx = Projectile.NewProjectile(
                         Projectile.GetSource_FromThis(), Projectile.Center, toTarget,
@@ -291,6 +334,9 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                 int interval = 22;
                 if (ctx.FunnelFireRateMul > 0f)
                     interval = Math.Max(8, (int)(interval / ctx.FunnelFireRateMul));
+                var fracOff = owner.GetModPlayer<ZaphielFracturePlayer>();
+                if (fracOff.FractureActive && ctx.PhantomBitsActive)
+                    interval = Math.Max(5, interval / 2);
 
                 if (Projectile.ai[0] < interval)
                     return;
@@ -300,7 +346,7 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                     return;
 
                 int dmg = Math.Max(1, (int)(Projectile.damage * ctx.MinionDamageMul * ctx.DamageMul * damageBonus * GetScoreMul(owner, ctx)));
-                GrantScore(owner, ctx, 1.4f);
+                GrantScore(owner, ctx, 3f);
                 Vector2 shot = (targetCenter - Projectile.Center).SafeNormalize(Vector2.UnitX) * 13f;
 
                 int projType = ProjectileType<PsybitUnchargedLaser>();
@@ -360,7 +406,7 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             if (!hasBeam && Projectile.owner == Main.myPlayer)
             {
                 float mult = (overcharged ? 2.5f : damageBonus) * ctx.MinionDamageMul * ctx.DamageMul * GetScoreMul(owner, ctx);
-                GrantScore(owner, ctx, 0.25f);
+                GrantScore(owner, ctx, 1.2f);
                 int index = Projectile.NewProjectile(
                     Projectile.GetSource_FromThis(),
                     Projectile.Center, Vector2.Zero,

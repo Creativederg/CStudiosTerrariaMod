@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 using CStudios.Content.Buffs;
 using CStudios.Content.NPCs;
 using System;
+using System.Collections.Generic;
 using Terraria;
 using Terraria.GameContent;
 using Terraria.Enums;
@@ -24,6 +25,22 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         //The distance charge particle from the player center
         private const float MOVE_DISTANCE = 88f;
 
+        // How often the charged beam emits a pair of Calamity Overhaul SHPC (CyberTraceBeamProj) rounds.
+        private const int ShpcBurstInterval = 10;
+        // Perpendicular offset from beam centerline so shots leave the top and bottom edges.
+        private const float ShpcEdgeOffset = 36f;
+        // Wide initial fan so the pair visibly peels off the laser before curving back in.
+        private const float ShpcPeelAngle = 0.42f;
+        private const float ShpcSpeed = 16f;
+        private const float ShpcDamageMul = 0.45f;
+        // How hard flanking shots bend back toward the laser after the fan-out.
+        private const float ShpcCurveLerp = 0.20f;
+        private const float ShpcLookAhead = 110f;
+        private const float ShpcAxisPull = 1.55f;
+
+        // Identities of SHPC rounds this laser spawned, so we can steer them back toward the beam.
+        private readonly List<int> _flankIdentities = new List<int>();
+
         // The actual distance is stored in the ai0 field
         // By making a property to handle this it makes our life easier, and the accessibility more readable
         public float Distance
@@ -37,6 +54,13 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
         {
             get => Projectile.localAI[0];
             set => Projectile.localAI[0] = value;
+        }
+
+        // localAI[1] used as a fire timer for flanking SHPC rounds
+        private float ShpcTimer
+        {
+            get => Projectile.localAI[1];
+            set => Projectile.localAI[1] = value;
         }
 
         // Are we at max charge? With c#6 you can simply use => which indicates this is a get only property
@@ -171,7 +195,122 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             SetLaserPosition(player);
             SpawnDusts(player);
             CastLights();
+            FireShpcFlankingRounds(player);
+            SteerFlankingRounds(player);
+        }
 
+        /// <summary>
+        /// While Omega's standard charged ultimate laser is live, emit Calamity Overhaul
+        /// SHPC CyberTraceBeamProj rounds from the top and bottom edges of the beam.
+        /// No-ops if CalamityOverhaul is not loaded.
+        /// </summary>
+        private void FireShpcFlankingRounds(Player player)
+        {
+            if (Projectile.owner != Main.myPlayer)
+                return;
+
+            if (!ModLoader.TryGetMod("CalamityOverhaul", out Mod cwr))
+                return;
+
+            if (!cwr.TryFind("CyberTraceBeamProj", out ModProjectile beamMod))
+                return;
+
+            ShpcTimer++;
+            if (ShpcTimer < ShpcBurstInterval)
+                return;
+            ShpcTimer = 0f;
+
+            Vector2 beamDir = Projectile.velocity.SafeNormalize(Vector2.UnitX);
+            Vector2 perp = beamDir.RotatedBy(MathHelper.PiOver2);
+
+            Vector2 playerToMouse = Main.MouseWorld - player.Center;
+            if (playerToMouse.LengthSquared() < 0.001f)
+                playerToMouse = beamDir;
+            playerToMouse.Normalize();
+            Vector2 muzzle = player.Center + playerToMouse * 76f;
+
+            int dmg = Math.Max(1, (int)(Projectile.damage * ShpcDamageMul));
+            int beamType = beamMod.Type;
+
+            // Extra jitter so successive pairs don't stack on the same arc.
+            float fanJitter = Main.rand.NextFloat(-0.06f, 0.06f);
+
+            // Top edge, then bottom edge of the laser — wide outward fan.
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Vector2 spawn = muzzle + perp * (ShpcEdgeOffset * side);
+                float peel = (ShpcPeelAngle + fanJitter) * side;
+                Vector2 vel = beamDir.RotatedBy(peel) * ShpcSpeed;
+
+                int idx = Projectile.NewProjectile(
+                    Projectile.GetSource_FromThis(),
+                    spawn,
+                    vel,
+                    beamType,
+                    dmg,
+                    Projectile.knockBack,
+                    player.whoAmI,
+                    ai0: Main.rand.Next(3));
+
+                if (idx >= 0 && idx < Main.maxProjectiles)
+                {
+                    // Kill CWR enemy-homing so our beam-curve isn't fighting it.
+                    Main.projectile[idx].ai[1] = 0f;
+                    Main.projectile[idx].DamageType = Projectile.DamageType;
+                    _flankIdentities.Add(Main.projectile[idx].identity);
+                }
+            }
+        }
+
+        /// <summary>
+        /// After the initial fan-out, bend each flanking SHPC round back toward a point
+        /// ahead on the ultimate laser so they wrap in around the beam.
+        /// </summary>
+        private void SteerFlankingRounds(Player player)
+        {
+            if (_flankIdentities.Count == 0)
+                return;
+
+            Vector2 origin = player.MountedCenter;
+            Vector2 beamDir = Projectile.velocity.SafeNormalize(Vector2.UnitX);
+
+            for (int i = _flankIdentities.Count - 1; i >= 0; i--)
+            {
+                int identity = _flankIdentities[i];
+                Projectile shot = null;
+                for (int p = 0; p < Main.maxProjectiles; p++)
+                {
+                    Projectile cand = Main.projectile[p];
+                    if (cand.active && cand.identity == identity && cand.owner == Projectile.owner)
+                    {
+                        shot = cand;
+                        break;
+                    }
+                }
+
+                if (shot == null)
+                {
+                    _flankIdentities.RemoveAt(i);
+                    continue;
+                }
+
+                Vector2 toShot = shot.Center - origin;
+                float along = Vector2.Dot(toShot, beamDir);
+                if (along < 40f)
+                    along = 40f;
+
+                Vector2 onBeam = origin + beamDir * along;
+                Vector2 ahead = origin + beamDir * (along + ShpcLookAhead);
+                Vector2 toAxis = onBeam - shot.Center;
+                Vector2 desired = (ahead - shot.Center) + toAxis * ShpcAxisPull;
+
+                if (desired.LengthSquared() < 0.001f)
+                    desired = beamDir;
+                desired = desired.SafeNormalize(beamDir) * ShpcSpeed;
+
+                shot.velocity = Vector2.Lerp(shot.velocity, desired, ShpcCurveLerp);
+                shot.rotation = shot.velocity.ToRotation();
+            }
         }
 
         private void SpawnDusts(Player player)
@@ -259,10 +398,8 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
                 int dustIndex = Dust.NewDust(MuzzlePosition, 0, 0, dustID, perturbedSpeed.X, perturbedSpeed.Y, 150, default, 1f);
                 Main.dust[dustIndex].noGravity = true;
                 Main.dust[dustIndex].color = dustColor;
-
             }
             float rotation = (float)Math.Atan2(Main.player[Projectile.owner].MountedCenter.Y - Main.MouseWorld.Y, Main.player[Projectile.owner].MountedCenter.X - Main.MouseWorld.X);//Aim towards mouse
-
 
 
 

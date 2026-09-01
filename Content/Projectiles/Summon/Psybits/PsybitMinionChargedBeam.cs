@@ -7,19 +7,17 @@ using CStudios.Content.Items.Weapons.Summon;
 using System;
 using Terraria;
 using Terraria.GameContent;
-using Terraria.Enums;
 using Terraria.ID;
 using Terraria.ModLoader;
 using static Terraria.ModLoader.ModContent;
+using CStudios.Content.Systems.ZaphielModules;
 
 namespace CStudios.Content.Projectiles.Summon.Psybits
 {
-    // Ultimate beam — thicker, longer, stronger, applies Entropic Corruption
-    // ai[1] = parent Psybits whoAmI
     public class PsybitMinionChargedBeam : ModProjectile
     {
         private const float MOVE_DISTANCE = 8f;
-        private const float MAX_RANGE = 900f; // longer than normal minion beam
+        private const float MAX_RANGE = 900f;
 
         public float Distance
         {
@@ -40,11 +38,16 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             Projectile.tileCollide = false;
             Projectile.DamageType = GetInstance<PsychokineticDamageClass>();
             Projectile.timeLeft = 2;
+            Projectile.usesLocalNPCImmunity = true;
+            Projectile.localNPCHitCooldown = 8;
         }
 
         public override bool PreDraw(ref Color lightColor)
         {
             if (Distance < 10f)
+                return false;
+
+            if (ParentIdentity < 0 || ParentIdentity >= Main.maxProjectiles)
                 return false;
 
             Projectile parent = Main.projectile[ParentIdentity];
@@ -58,7 +61,6 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             Main.spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.Additive, SamplerState.LinearClamp,
                 DepthStencilState.None, RasterizerState.CullNone, null, Main.GameViewMatrix.TransformationMatrix);
 
-            // Thicker than normal minion beam (scale 0.75 vs 0.35)
             DrawLaser(Main.spriteBatch, TextureAssets.Projectile[Projectile.type].Value,
                 start, Projectile.velocity, 8, -MathHelper.PiOver2, 0.75f, MAX_RANGE, beamColor, (int)MOVE_DISTANCE);
 
@@ -94,6 +96,9 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             if (Distance < 10f)
                 return false;
 
+            if (ParentIdentity < 0 || ParentIdentity >= Main.maxProjectiles)
+                return false;
+
             Projectile parent = Main.projectile[ParentIdentity];
             if (!parent.active)
                 return false;
@@ -104,13 +109,11 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             return Collision.CheckAABBvLineCollision(
                 targetHitbox.TopLeft(), targetHitbox.Size(),
                 start, start + Projectile.velocity * Distance,
-                14, ref point); // wider than normal minion beam
+                14, ref point);
         }
 
         public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
         {
-            target.immune[Projectile.owner] = 6; // hits more often than normal minion beam
-
             int held = Main.player[Projectile.owner].HeldItem.type;
             bool applyEntropic =
                 held == ItemType<ZaphielElectaResonator>()
@@ -138,14 +141,23 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             Projectile parent = Main.projectile[ParentIdentity];
             Player owner = Main.player[Projectile.owner];
 
-            // End immediately when ultimate expires or parent dies
-            if (!parent.active || parent.type != ProjectileType<Psybits>()
-                || parent.owner != Projectile.owner
-                || !owner.HasBuff(BuffType<PsybitOvercharge>()))
+            bool fromBit = parent.type == ProjectileType<Psybits>();
+            bool fromTurret = parent.type == ProjectileType<FinalityTurret>();
+
+            if (!parent.active || parent.owner != Projectile.owner || (!fromBit && !fromTurret))
             {
                 Projectile.Kill();
                 return;
             }
+
+            if (fromBit && !owner.HasBuff(BuffType<PsybitOvercharge>()))
+            {
+                Projectile.Kill();
+                return;
+            }
+
+            var ctx = ZaphielModuleSystem.Resolve(owner);
+            Projectile.localNPCHitCooldown = ZaphielBeamHitDelay.For(ctx);
 
             Projectile.timeLeft = 2;
             Projectile.Center = parent.Center;
@@ -175,7 +187,6 @@ namespace CStudios.Content.Projectiles.Summon.Psybits
             Projectile.velocity = toTarget.SafeNormalize(Vector2.UnitX);
             Distance = Math.Min(dist, MAX_RANGE);
 
-            // Extra particles while ultimate is active
             if (Main.rand.NextBool(2))
             {
                 Vector2 end = parent.Center + Projectile.velocity * Distance;
