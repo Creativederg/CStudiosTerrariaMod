@@ -42,21 +42,41 @@ namespace CStudios.Content.Systems.ZaphielModules
                 Close();
         }
 
+        private static bool HoldingElecta(Player player)
+        {
+            if (player == null || !player.active)
+                return false;
+            Item held = player.HeldItem;
+            if (held == null || held.IsAir || held.ModItem == null)
+                return false;
+            return held.ModItem.Name == "ZaphielElectaOmega";
+        }
+
         public override void UpdateUI(GameTime gameTime)
         {
+            Player player = Main.LocalPlayer;
+            bool holding = HoldingElecta(player);
+
             if (OpenModulesKey != null && OpenModulesKey.JustPressed)
-                Toggle();
+            {
+                if (Interface?.CurrentState != null)
+                    Close();
+                else if (holding)
+                    Open();
+            }
 
             Interface?.Update(gameTime);
         }
 
         public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers)
         {
-            int idx = layers.FindIndex(l => l.Name == "Vanilla: Resource Bars");
+            int idx = layers.FindIndex(l => l.Name == "Vanilla: Mouse Text");
+            if (idx == -1)
+                idx = layers.FindIndex(l => l.Name == "Vanilla: Resource Bars");
             if (idx == -1)
                 return;
 
-            layers.Insert(idx + 1, new LegacyGameInterfaceLayer(
+            layers.Insert(idx, new LegacyGameInterfaceLayer(
                 "CStudios: Lance Matrix",
                 () =>
                 {

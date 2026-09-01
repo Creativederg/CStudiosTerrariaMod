@@ -31,11 +31,10 @@ namespace CStudios.Content.Systems.ZaphielModules.Score
 
             for (int i = 0; i < 8; i++)
             {
-                Vector2 vel = Main.rand.NextVector2Circular(10f, 10f);
                 int idx = Projectile.NewProjectile(
                     player.GetSource_FromThis(),
                     player.Center,
-                    vel,
+                    Main.rand.NextVector2Circular(10f, 10f),
                     ProjectileType<PsybitUnchargedLaser>(),
                     dmg, 3f, player.whoAmI);
                 if (idx >= 0)

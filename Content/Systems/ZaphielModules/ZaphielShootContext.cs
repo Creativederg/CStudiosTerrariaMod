@@ -76,6 +76,24 @@ namespace CStudios.Content.Systems.ZaphielModules
         public float StigmaBonusMul;    // default 1f
         public float DataStormMildMul;  // default 1f
 
+        //Time Fracture Protocol
+        public bool FractureMode;
+        public bool FractureEdgeActive;
+        public bool TimeLockActive;
+        public bool FractureCoreActive;
+        public bool PermetAfterimageActive;
+        public bool PhantomBitsActive;
+        public float FractureDurationMul;
+
+        //Finality Overclock
+        public bool FinalityMode;
+        public bool FinalityEdgeActive;
+        public bool CocoonLockActive;
+        public bool FinalityCoreActive;
+        public bool OriginRelayActive;
+        public bool CocoonBitsActive;
+        public float FinalityDurationMul;
+
 
         public static ZaphielShootContext Default => new()
         {
@@ -145,6 +163,22 @@ namespace CStudios.Content.Systems.ZaphielModules
             ScoreGainMul = 1f,
             StigmaBonusMul = 1f,
             DataStormMildMul = 1f,
+
+            FractureMode = false,
+            FractureEdgeActive = false,
+            TimeLockActive = false,
+            FractureCoreActive = false,
+            PermetAfterimageActive = false,
+            PhantomBitsActive = false,
+            FractureDurationMul = 1f,
+
+            FinalityMode = false,
+            FinalityEdgeActive = false,
+            CocoonLockActive = false,
+            FinalityCoreActive = false,
+            OriginRelayActive = false,
+            CocoonBitsActive = false,
+            FinalityDurationMul = 1f,
         };
     }
 }
