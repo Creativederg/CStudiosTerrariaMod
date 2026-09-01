@@ -40,17 +40,17 @@ namespace CStudios.Content.Items.Armor
             player.setBonus = ap.ActiveFantasy switch
             {
                 ZaphielFantasy.AuthorityOfTheBits =>
-                    "Throne Command: Authority patterns are stronger and cheaper. +2 max minions while commanding.",
+                    "Throne Command: two extra bits that cost no slots.",
                 ZaphielFantasy.AerialHerrscher =>
-                    "Sky Sovereign: Aerial Herrscher Form lasts longer. Improved air control and funnel performance.",
+                    "Sky Sovereign: no fall damage, stronger air control.",
                 ZaphielFantasy.ScoreAndStigma =>
-                    "Resonant Overclock: Score builds faster, stigma bonuses are stronger, data storms are milder.",
-                ZaphielFantasy.RemoteSymphony =>
-                    "Conductor's Mantle: Role switching is instant. Harmony bonuses increased.",
-                ZaphielFantasy.FinalPermission =>
-                    "Last Authority: Final Permission is more stable, lasts longer, and has reduced aftermath cost.",
+                    "Resonant Overclock: score stays live at cap. +life regen.",
+                ZaphielFantasy.TimeFracture =>
+                    "Permet Mantle: echoes last; you move through the freeze.",
+                ZaphielFantasy.Finality =>
+                    "Last Herrscher: while Finality is active, Trace bolts pulse from you.",
                 _ =>
-                    "Adaptive Matrix: +10 max minions. Solid Psychokinetic power. Modules are more effective."
+                    "Adaptive Matrix: solid Psychokinetic power."
             };
         }
 

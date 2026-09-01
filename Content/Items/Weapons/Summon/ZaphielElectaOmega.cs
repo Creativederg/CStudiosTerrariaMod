@@ -6,6 +6,8 @@ using CStudios.Content.Systems.ZaphielModules;
 using CStudios.Content.Systems.ZaphielModules.Authority;
 using CStudios.Content.Systems.ZaphielModules.Aerial;
 using CStudios.Content.Systems.ZaphielModules.Score;
+using CStudios.Content.Systems.ZaphielModules.Fracture;
+using CStudios.Content.Systems.ZaphielModules.Finality;
 using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
@@ -59,6 +61,8 @@ namespace CStudios.Content.Items.Weapons.Summon
             var ctx = ZaphielModuleSystem.Resolve(player);
             damage *= ctx.DamageMul;
             damage *= ZaphielBossProgress.GetBossPowerMul(Item);
+            if (ctx.RisingScoreEdgeActive || ctx.ScoreMode)
+                damage *= player.GetModPlayer<ZaphielScorePlayer>().DamageFromScore();
         }
 
         public override void ModifyWeaponCrit(Player player, ref float crit)
@@ -70,14 +74,17 @@ namespace CStudios.Content.Items.Weapons.Summon
         {
             var ctx = ZaphielModuleSystem.Resolve(player);
             mult *= ctx.ManaCostMul;
-
             if (player.channel && !ctx.MeleeMode && !ctx.TraceVolleyMode)
                 mult = 0f;
         }
 
         public override float UseSpeedMultiplier(Player player)
         {
-            return ZaphielModuleSystem.Resolve(player).AttackSpeedMul;
+            var ctx = ZaphielModuleSystem.Resolve(player);
+            float speed = ctx.AttackSpeedMul;
+            if (ctx.RisingScoreEdgeActive)
+                speed *= 1f + player.GetModPlayer<ZaphielScorePlayer>().Score01 * 0.20f;
+            return speed;
         }
 
         public override void ModifyTooltips(List<TooltipLine> tooltips)
@@ -88,15 +95,46 @@ namespace CStudios.Content.Items.Weapons.Summon
 
             tooltips.Add(new TooltipLine(Mod, "OmegaBosses",
                 $"Boss synchronizations: {prog.KilledBossTypes.Count} (+{pct}% damage)")
-            {
-                OverrideColor = new Color(255, 100, 140)
-            });
+            { OverrideColor = new Color(255, 100, 140) });
 
             tooltips.Add(new TooltipLine(Mod, "OmegaModules",
-                "Default: single beam. Splinter Beam: volleys. Apex Edge: melee. Ultimate: Authority / Aerial Form / Overcharge.")
-            {
-                OverrideColor = new Color(255, 120, 160)
-            });
+                "Ultimate: Authority / Aerial / Score / Fracture / Finality / Overcharge.")
+            { OverrideColor = new Color(255, 120, 160) });
+
+            Player player = Main.LocalPlayer;
+            if (player == null || !player.active)
+                return;
+
+            var ctx = ZaphielModuleSystem.Resolve(player);
+            var aerial = player.GetModPlayer<ZaphielAerialPlayer>();
+            var score = player.GetModPlayer<ZaphielScorePlayer>();
+            var frac = player.GetModPlayer<ZaphielFracturePlayer>();
+            var fin = player.GetModPlayer<ZaphielFinalityPlayer>();
+
+            if (aerial.FormActive)
+                tooltips.Add(new TooltipLine(Mod, "HerrscherForm", $"Herrscher Form: {aerial.FormTimer / 60 + 1}s")
+                { OverrideColor = new Color(120, 210, 255) });
+            else if (aerial.FormCooldown > 0)
+                tooltips.Add(new TooltipLine(Mod, "HerrscherCD", $"Herrscher Form ready in {aerial.FormCooldown / 60 + 1}s")
+                { OverrideColor = new Color(180, 180, 220) });
+
+            if (ctx.FeedbackHeartActive || ctx.ScoreMode)
+                tooltips.Add(new TooltipLine(Mod, "ScoreTip", $"Score: {score.Score:0}/100")
+                { OverrideColor = new Color(255, 210, 80) });
+
+            if (frac.FractureActive)
+                tooltips.Add(new TooltipLine(Mod, "FracOn", $"Time Fracture: {frac.FractureTimer / 60 + 1}s")
+                { OverrideColor = new Color(180, 140, 255) });
+            else if (frac.FractureCooldown > 0)
+                tooltips.Add(new TooltipLine(Mod, "FracCd", $"Fracture ready in {frac.FractureCooldown / 60 + 1}s")
+                { OverrideColor = new Color(140, 130, 170) });
+
+            if (fin.FinalityActive)
+                tooltips.Add(new TooltipLine(Mod, "FinOn", $"Finality: {fin.FinalityTimer / 60 + 1}s")
+                { OverrideColor = new Color(255, 220, 140) });
+            else if (fin.FinalityCooldown > 0)
+                tooltips.Add(new TooltipLine(Mod, "FinCd", $"Finality ready in {fin.FinalityCooldown / 60 + 1}s")
+                { OverrideColor = new Color(160, 140, 110) });
         }
 
         public override bool AltFunctionUse(Player player) => true;
@@ -115,6 +153,10 @@ namespace CStudios.Content.Items.Weapons.Summon
         public override void HoldItem(Player player)
         {
             var ctx = ZaphielModuleSystem.Resolve(player);
+            var aerial = player.GetModPlayer<ZaphielAerialPlayer>();
+            var fin = player.GetModPlayer<ZaphielFinalityPlayer>();
+            bool skybladeForm = ctx.SkybladeManifestActive && aerial.FormActive;
+            bool finalitySlash = ctx.FinalityEdgeActive && fin.FinalityActive;
 
             if (ctx.MeleeMode)
             {
@@ -122,7 +164,7 @@ namespace CStudios.Content.Items.Weapons.Summon
                 Item.channel = false;
                 Item.useStyle = ItemUseStyleID.Swing;
             }
-            else if (ctx.TraceVolleyMode)
+            else if (ctx.TraceVolleyMode || skybladeForm || finalitySlash)
             {
                 Item.noUseGraphic = true;
                 Item.channel = false;
@@ -146,16 +188,24 @@ namespace CStudios.Content.Items.Weapons.Summon
                 AuthorityPatternSystem.TryActivatePattern(player);
                 return;
             }
-
             if (ctx.HerrscherDriveActive)
             {
                 AerialHerrscherSystem.TryActivateForm(player);
                 return;
             }
-
             if (ctx.FeedbackHeartActive)
             {
                 ScoreStigmaSystem.TryBurst(player);
+                return;
+            }
+            if (ctx.FractureCoreActive)
+            {
+                FractureSystem.TryActivate(player);
+                return;
+            }
+            if (ctx.FinalityCoreActive)
+            {
+                FinalitySystem.TryActivate(player);
                 return;
             }
 
@@ -221,6 +271,102 @@ namespace CStudios.Content.Items.Weapons.Summon
             int dmg = System.Math.Max(1, (int)(damage * ctx.DamageMul));
             Vector2 aim = velocity.SafeNormalize(Vector2.UnitX);
 
+            var aerial = player.GetModPlayer<ZaphielAerialPlayer>();
+            var fin = player.GetModPlayer<ZaphielFinalityPlayer>();
+            if (ctx.SkybladeManifestActive && aerial.FormActive)
+            {
+                int slashes = System.Math.Max(3, 3 + ctx.BeamCountAdd);
+                float arc = 0.55f * ctx.SpreadMul;
+                float speed = 26f * (ctx.BeamSpeedMul > 0f ? ctx.BeamSpeedMul : 1f);
+
+                for (int i = 0; i < slashes; i++)
+                {
+                    float t = slashes == 1 ? 0f : (i / (float)(slashes - 1) - 0.5f);
+                    int idx = Projectile.NewProjectile(
+                        source, player.Center + aim * 28f,
+                        aim.RotatedBy(t * arc) * speed,
+                        ProjectileType<AerialSkybladeSlash>(),
+                        dmg, knockback, player.whoAmI);
+                    if (idx >= 0)
+                    {
+                        Main.projectile[idx].timeLeft = 40;
+                        Main.projectile[idx].extraUpdates = 2;
+                        Main.projectile[idx].scale = 1.2f + 0.15f * System.Math.Abs(t);
+                        Main.projectile[idx].penetrate += ctx.ExtraPierce;
+                    }
+                }
+
+                int ribbons = ctx.FunnelOverflowActive ? 3 : 2;
+                for (int i = 0; i < ribbons; i++)
+                {
+                    float off = (i - (ribbons - 1) * 0.5f) * 0.18f;
+                    int idx = Projectile.NewProjectile(
+                        source, player.Center + aim * 20f,
+                        aim.RotatedBy(off) * speed * 0.9f,
+                        ProjectileType<PsybitUnchargedLaser>(),
+                        System.Math.Max(1, (int)(dmg * 0.75f)),
+                        knockback * 0.6f, player.whoAmI);
+                    if (idx >= 0)
+                    {
+                        Main.projectile[idx].timeLeft = 48;
+                        Main.projectile[idx].extraUpdates = 2;
+                        Main.projectile[idx].penetrate = -1;
+                        Main.projectile[idx].scale = 1.35f;
+                    }
+                }
+
+                if (ctx.ScoreMode)
+                    player.GetModPlayer<ZaphielScorePlayer>().AddScore(1.5f, ctx);
+
+                SoundEngine.PlaySound(SoundID.Item71, player.Center);
+                SpawnGunVisual(player);
+                return false;
+            }
+
+            if (ctx.FinalityEdgeActive && fin.FinalityActive)
+            {
+                int slashes = System.Math.Max(4, 4 + ctx.BeamCountAdd);
+                if (ctx.OriginRelayActive)
+                    slashes += 2;
+
+                float arc = 0.70f * ctx.SpreadMul;
+                float speed = 24f * (ctx.BeamSpeedMul > 0f ? ctx.BeamSpeedMul : 1f);
+
+                for (int i = 0; i < slashes; i++)
+                {
+                    float t = slashes == 1 ? 0f : (i / (float)(slashes - 1) - 0.5f);
+                    int idx = Projectile.NewProjectile(
+                        source, player.Center + aim * 28f,
+                        aim.RotatedBy(t * arc) * speed,
+                        ProjectileType<FinalitySlash>(),
+                        dmg, knockback, player.whoAmI);
+                    if (idx >= 0)
+                    {
+                        Main.projectile[idx].scale = 1.35f + 0.1f * System.Math.Abs(t);
+                        Main.projectile[idx].penetrate += ctx.ExtraPierce;
+                    }
+                }
+
+                int turretCap = System.Math.Max(1, player.maxMinions / 2);
+                if (player.velocity.LengthSquared() > 2.5f
+                    && player.ownedProjectileCounts[ProjectileType<FinalityTurret>()] < turretCap)
+                {
+                    Vector2 spot = player.Center
+                        + new Vector2(Main.rand.NextFloat(-70f, 70f), Main.rand.NextFloat(-90f, -40f));
+                    int tIdx = Projectile.NewProjectile(
+                        source, spot, Vector2.Zero,
+                        ProjectileType<FinalityTurret>(),
+                        0, 0f, player.whoAmI,
+                        ai0: Main.rand.Next(11));
+                    if (tIdx >= 0)
+                        Main.projectile[tIdx].minionSlots = 0f;
+                }
+
+                SoundEngine.PlaySound(SoundID.Item71, player.Center);
+                SpawnGunVisual(player);
+                return false;
+            }
+
             if (ctx.MeleeMode)
             {
                 int idx = Projectile.NewProjectile(source, player.Center + aim * 48f, aim,
@@ -233,6 +379,8 @@ namespace CStudios.Content.Items.Weapons.Summon
                     Main.projectile[idx].velocity *= 0.12f;
                     Main.projectile[idx].scale = ctx.MeleeSizeMul > 0f ? ctx.MeleeSizeMul : 1f;
                 }
+                if (ctx.ScoreMode)
+                    player.GetModPlayer<ZaphielScorePlayer>().AddScore(2.0f, ctx);
                 SoundEngine.PlaySound(SoundID.Item1, player.Center);
                 return false;
             }
@@ -255,6 +403,9 @@ namespace CStudios.Content.Items.Weapons.Summon
                     SoundEngine.PlaySound(SoundID.Item92, player.Center);
                 }
 
+                if (ctx.ScoreMode || ctx.RisingScoreEdgeActive || ctx.FeedbackHeartActive || ctx.LivingGaugeActive)
+                    player.GetModPlayer<ZaphielScorePlayer>().AddScore(3.5f, ctx);
+
                 SpawnGunVisual(player);
                 return false;
             }
@@ -266,6 +417,8 @@ namespace CStudios.Content.Items.Weapons.Summon
                     Projectile.NewProjectile(source, player.Center, aim, beamType, dmg, knockback, player.whoAmI);
                     SoundEngine.PlaySound(SoundID.Item15, player.Center);
                 }
+                if (ctx.ScoreMode)
+                    player.GetModPlayer<ZaphielScorePlayer>().AddScore(0.35f, ctx);
                 SpawnGunVisual(player);
                 return false;
             }
@@ -276,7 +429,6 @@ namespace CStudios.Content.Items.Weapons.Summon
         {
             if (!ModLoader.TryGetMod("CalamityOverhaul", out Mod cwr))
                 return false;
-
             if (!cwr.TryFind("CyberTraceBeamProj", out ModProjectile beamMod))
                 return false;
 
@@ -335,13 +487,10 @@ namespace CStudios.Content.Items.Weapons.Summon
             {
                 if (cal.TryFind("DivineGeode", out ModItem geode))
                     recipe.AddIngredient(geode.Type, 15);
-
                 if (cal.TryFind("UnholyEssence", out ModItem essence))
                     recipe.AddIngredient(essence.Type, 20);
-
                 if (cal.TryFind("UelibloomBar", out ModItem ueli))
                     recipe.AddIngredient(ueli.Type, 10);
-
                 if (cal.TryFind("CosmicAnvil", out ModTile cosmicAnvil))
                     recipe.AddTile(cosmicAnvil.Type);
                 else
